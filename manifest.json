@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "Stillroom - Focus New Tab",
+  "version": "1.0.0",
+  "description": "A peaceful new tab with quick search, shortcuts, and a focus timer.",
+  "chrome_url_overrides": {
+    "newtab": "newtab.html"
+  },
+  "host_permissions": [
+    "https://suggestqueries.google.com/*"
+  ]
+}

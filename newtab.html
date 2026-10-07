@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#152b31">
+    <title>Stillroom</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="new-tab">
+      <div class="scene" aria-hidden="true">
+        <video id="wallpaper-video" autoplay muted loop playsinline hidden></video>
+      </div>
+      <div class="shade" aria-hidden="true"></div>
+
+      <button class="sound-toggle glass-icon" type="button" aria-label="Toggle ambient sound" title="Toggle ambient sound">
+        <span class="sound-on" aria-hidden="true">♫</span>
+        <span class="sound-off" aria-hidden="true">♪</span>
+      </button>
+      <button class="save-toggle glass-icon" type="button" aria-label="Save this scene" title="Save this scene" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4.75A1.75 1.75 0 0 1 7.75 3h8.5A1.75 1.75 0 0 1 18 4.75V21l-6-3.8L6 21V4.75Z"/></svg>
+      </button>
+      <button class="settings-toggle glass-icon" id="settings-toggle" type="button" aria-label="Settings" title="Settings">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"/><path d="m19.4 13.5 1.1.9-1.5 2.6-1.4-.5a7.8 7.8 0 0 1-1.4.8l-.2 1.5h-3l-.3-1.5a7.8 7.8 0 0 1-1.4-.8l-1.4.5-1.5-2.6 1.1-.9a6.8 6.8 0 0 1 0-1.6l-1.1-.9 1.5-2.6 1.4.5a7.8 7.8 0 0 1 1.4-.8l.3-1.5h3l.2 1.5a7.8 7.8 0 0 1 1.4.8l1.4-.5 1.5 2.6-1.1.9a6.8 6.8 0 0 1 0 1.6Z"/></svg>
+      </button>
+
+      <section class="center-panel" aria-label="Clock and search">
+        <div class="clock" id="clock" aria-live="off">--:--</div>
+        <div class="date" id="date">Loading date…</div>
+
+        <div class="weather" aria-label="A little weather-inspired note">
+          <span class="weather-icon" aria-hidden="true">☀</span>
+          <span class="weather-copy">
+            <strong>Make today yours</strong>
+            <span>A little space to think, wherever you are</span>
+          </span>
+        </div>
+
+        <div class="search-wrapper">
+          <form class="search" id="search-form" role="search">
+            <label class="visually-hidden" for="search-input">Search the web</label>
+            <input id="search-input" name="q" type="search" placeholder="What are you looking for?" autocomplete="off" spellcheck="false">
+            <button type="submit" aria-label="Search Google">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 4.4 4.4"/></svg>
+            </button>
+          </form>
+          <div id="search-suggestions" class="search-suggestions" hidden></div>
+        </div>
+
+        <nav class="shortcuts" aria-label="Quick links">
+          <a class="shortcut" href="https://www.youtube.com/">
+            <span class="shortcut-icon youtube" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.6 12 3.6 12 3.6s-7.5 0-9.4.5A3 3 0 0 0 .5 6.2 31 31 0 0 0 0 12a31 31 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1A31 31 0 0 0 24 12a31 31 0 0 0-.5-5.8ZM9.6 15.6V8.4l6.3 3.6-6.3 3.6Z"/></svg>
+            </span>
+            <span>YouTube</span>
+          </a>
+          <a class="shortcut" href="https://www.google.com/">
+            <span class="shortcut-icon google" aria-hidden="true">G</span>
+            <span>Google</span>
+          </a>
+          <a class="shortcut" href="https://www.pinterest.com/">
+            <span class="shortcut-icon pinterest" aria-hidden="true">P</span>
+            <span>Pinterest</span>
+          </a>
+          <a class="shortcut" href="https://store.steampowered.com/">
+            <span class="shortcut-icon steam" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M12.4 2a10 10 0 0 0-9.9 8.7l5.4 2.2a3.2 3.2 0 0 1 1.8-.5l2.4-3.5v-.1a4 4 0 1 1 4 4h-.1l-3.5 2.5a3.2 3.2 0 0 1-6.3.7L2.4 14a10 10 0 1 0 10-12Zm3.7 9.5a2.2 2.2 0 1 0 0-4.4 2.2 2.2 0 0 0 0 4.4ZM10 15.8c-.8 0-1.5.4-1.8 1.1l1.9.8a1.3 1.3 0 0 0 1.7-.7 1.3 1.3 0 0 0-.7-1.7 1.4 1.4 0 0 0-1.1 0Z"/></svg>
+            </span>
+            <span>Steam</span>
+          </a>
+        </nav>
+      </section>
+
+      <section class="welcome" aria-label="Welcome">
+        <h1 id="greeting">Good day</h1>
+        <p>Take a breath. You're right where you need to be.</p>
+      </section>
+
+      <section class="focus-widget" aria-label="Focus timer">
+        <div class="timer-ring">
+          <svg viewBox="0 0 120 120" aria-hidden="true">
+            <circle class="timer-track" cx="60" cy="60" r="54"/>
+            <circle class="timer-progress" id="timer-progress" cx="60" cy="60" r="54"/>
+          </svg>
+          <div class="timer-content">
+            <span id="timer-display">25:00</span>
+            <span class="timer-label">FOCUS</span>
+          </div>
+        </div>
+        <div class="timer-controls">
+          <button class="timer-button" id="timer-toggle" type="button" aria-label="Start focus timer" title="Start focus timer">
+            <svg id="play-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 12 7-12 7V5Z"/></svg>
+            <svg id="pause-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3v14H7zM14 5h3v14h-3z"/></svg>
+          </button>
+          <button class="reset-button" id="timer-reset" type="button" aria-label="Reset focus timer" title="Reset focus timer">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.8-4L3 10"/><path d="M3 5v5h5M4 13a8 8 0 0 0 14.8 4L21 14"/><path d="M21 19v-5h-5"/></svg>
+          </button>
+        </div>
+      </section>
+
+      <div class="scene-caption" aria-hidden="true">A quiet place to begin</div>
+      <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+      <dialog class="wallpaper-dialog" id="wallpaper-dialog" aria-labelledby="wallpaper-dialog-title">
+        <nav class="settings-sidebar" aria-label="Settings sections">
+          <span class="settings-sidebar-label">SETTINGS</span>
+          <button class="settings-nav-item is-active" type="button" aria-current="page">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9" r="1.5"/><path d="m21 15-5-5L5 20"/></svg>
+            <span>Wallpaper</span>
+          </button>
+        </nav>
+        <section class="settings-content">
+          <header class="settings-content-header">
+            <div>
+              <p class="settings-eyebrow">PERSONALIZE</p>
+              <h2 id="wallpaper-dialog-title">Settings</h2>
+              <p>Manage your new-tab experience.</p>
+            </div>
+            <button class="dialog-close" id="wallpaper-close" type="button" aria-label="Close settings">×</button>
+          </header>
+          <section class="wallpaper-library" id="wallpaper-library" aria-labelledby="wallpaper-section-title">
+            <div class="wallpaper-section-header">
+              <div>
+                <h3 id="wallpaper-section-title">Wallpaper</h3>
+                <p>Choose a scene or add one from your device.</p>
+              </div>
+              <div class="upload-actions">
+                <label class="upload-button" for="wallpaper-upload-image">＋ Upload image</label>
+                <input class="visually-hidden" id="wallpaper-upload-image" type="file" accept="image/*">
+                <label class="upload-button" for="wallpaper-upload-video">＋ Upload video</label>
+                <input class="visually-hidden" id="wallpaper-upload-video" type="file" accept="video/*">
+              </div>
+            </div>
+            <div class="wallpaper-grid" id="wallpaper-grid" aria-label="Available wallpapers"></div>
+          </section>
+
+          <section class="wallpaper-editor" id="wallpaper-editor" aria-labelledby="wallpaper-editor-title" hidden>
+            <header class="wallpaper-editor-header">
+              <div class="editor-title-group">
+                <h3 id="wallpaper-editor-title-label">Preview wallpaper</h3>
+                <input type="text" id="wallpaper-name-input" class="wallpaper-name-field" placeholder="Wallpaper name">
+              </div>
+              <button class="dialog-close editor-close" id="wallpaper-cancel" type="button" aria-label="Close wallpaper editor">×</button>
+            </header>
+            <div class="wallpaper-preview" id="wallpaper-preview" role="img" aria-label="Wallpaper preview">
+              <div class="wallpaper-preview-inner" id="wallpaper-preview-inner">
+                <video id="wallpaper-preview-video" autoplay muted loop playsinline hidden></video>
+              </div>
+            </div>
+            <div class="wallpaper-adjustments">
+              <label class="adjustment-control" for="wallpaper-zoom">
+                <span>Zoom <output id="wallpaper-zoom-value" for="wallpaper-zoom">1.015×</output></span>
+                <input id="wallpaper-zoom" type="range" min="1" max="2.5" step="0.005" value="1.015">
+              </label>
+              <div class="adjustment-control">
+                <span>Rotation <output id="wallpaper-rotation-value">0°</output></span>
+                <div class="rotation-control">
+                  <button class="rotate-button" id="rotate-left" type="button" aria-label="Rotate left 90 degrees">↶</button>
+                  <span class="rotation-value" id="wallpaper-rotation-choice">0°</span>
+                  <button class="rotate-button" id="rotate-right" type="button" aria-label="Rotate right 90 degrees">↷</button>
+                </div>
+              </div>
+              <label class="adjustment-control" for="wallpaper-brightness">
+                <span>Brightness <output id="wallpaper-brightness-value" for="wallpaper-brightness">100%</output></span>
+                <input id="wallpaper-brightness" type="range" min="40" max="160" step="1" value="100">
+              </label>
+            </div>
+            <footer class="wallpaper-editor-actions">
+              <button class="wallpaper-action danger" id="wallpaper-delete" type="button">Delete</button>
+              <button class="wallpaper-action secondary" id="wallpaper-reset" type="button">Reset image</button>
+              <span class="wallpaper-action-spacer"></span>
+              <button class="wallpaper-action secondary" id="wallpaper-set-default" type="button">Set as default</button>
+              <button class="wallpaper-action primary" id="wallpaper-apply" type="button">Apply</button>
+            </footer>
+          </section>
+        </section>
+        <div class="delete-confirm" id="wallpaper-delete-confirm" role="alertdialog" aria-labelledby="delete-confirm-title" aria-describedby="delete-confirm-copy" hidden>
+          <h3 id="delete-confirm-title">Delete wallpaper?</h3>
+          <p id="delete-confirm-copy">This will permanently remove this wallpaper from your library.</p>
+          <div class="delete-confirm-actions">
+            <button class="wallpaper-action secondary" id="wallpaper-delete-cancel" type="button">Cancel</button>
+            <button class="wallpaper-action danger" id="wallpaper-delete-confirm-button" type="button">Delete wallpaper</button>
+          </div>
+        </div>
+        <p class="wallpaper-notice" id="wallpaper-notice" role="status" aria-live="polite" hidden></p>
+      </dialog>
+    </main>
+    <script src="app.js"></script>
+  </body>
+</html>
