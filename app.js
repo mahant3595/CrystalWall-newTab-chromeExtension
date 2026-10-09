@@ -5,6 +5,10 @@ const greetingElement = document.querySelector("#greeting");
 const timerDisplay = document.querySelector("#timer-display");
 const timerProgress = document.querySelector("#timer-progress");
 const timerToggle = document.querySelector("#timer-toggle");
+const timerEditButton = document.querySelector("#timer-edit");
+const timerEditor = document.querySelector("#timer-editor");
+const timerMinutesInput = document.querySelector("#timer-minutes");
+const timerSecondsInput = document.querySelector("#timer-seconds");
 const toastElement = document.querySelector("#toast");
 
 const wallpaperDialog = document.querySelector("#wallpaper-dialog");
@@ -25,6 +29,32 @@ const wallpaperBrightnessValue = document.querySelector("#wallpaper-brightness-v
 const wallpaperDeleteButton = document.querySelector("#wallpaper-delete");
 const wallpaperDeleteConfirm = document.querySelector("#wallpaper-delete-confirm");
 const wallpaperNameInput = document.querySelector("#wallpaper-name-input");
+const wallpaperSettingsTab = document.querySelector("#wallpaper-settings-tab");
+const musicSettingsTab = document.querySelector("#music-settings-tab");
+const quotesSettingsTab = document.querySelector("#quotes-settings-tab");
+const musicLibrary = document.querySelector("#music-library");
+const quotesLibrary = document.querySelector("#quotes-library");
+const musicUpload = document.querySelector("#music-upload");
+const musicTrackList = document.querySelector("#music-track-list");
+const musicPlayer = document.querySelector("#custom-music-player");
+const musicVolume = document.querySelector("#music-volume");
+const musicVolumeValue = document.querySelector("#music-volume-value");
+const musicLoop = document.querySelector("#music-loop");
+const quoteDefaults = {
+  welcome: "Take a breath. You're right where you need to be.",
+  title: "Make today yours",
+  subtitle: "A little space to think, wherever you are"
+};
+const quoteElements = {
+  welcome: document.querySelector("#quote-welcome"),
+  title: document.querySelector("#quote-title"),
+  subtitle: document.querySelector("#quote-subtitle")
+};
+const quoteInputs = {
+  welcome: document.querySelector("#quote-welcome-input"),
+  title: document.querySelector("#quote-title-input"),
+  subtitle: document.querySelector("#quote-subtitle-input")
+};
 wallpaperNameInput.addEventListener("input", () => {
   if (editingWallpaper) {
     editingWallpaper.name = wallpaperNameInput.value.trim() || "Untitled wallpaper";
@@ -141,11 +171,18 @@ const suggestionsContainer = document.querySelector("#search-suggestions");
 let suggestionFocusIndex = -1;
 let debounceTimer = null;
 let textBeforeRightArrow = ""; // Store original text when Right arrow is pressed
+let recentSearchesCache = [];
+let suggestionRequestId = 0;
+let suggestionAbortController = null;
+const suggestionCache = new Map();
 
-async function fetchSuggestions(query) {
+async function fetchSuggestions(query, signal) {
   if (!query) return [];
   try {
-    const response = await fetch(`https://suggestqueries.google.com/complete/search?client=chrome&q=${encodeURIComponent(query)}`);
+    const response = await fetch(`https://suggestqueries.google.com/complete/search?client=chrome&q=${encodeURIComponent(query)}`, { signal });
+    if (!response.ok) {
+      throw new Error(`Suggestion request failed with status ${response.status}`);
+    }
     const text = await response.text();
 
     // Google suggests returns a JSONP-like response: [ "query", ["suggestion1", "suggestion2", ...], ... ]
@@ -157,21 +194,25 @@ async function fetchSuggestions(query) {
     const data = JSON.parse(jsonString);
     return Array.isArray(data) && data[1] ? data[1] : [];
   } catch (error) {
+    if (error.name === "AbortError") return [];
     console.error("Error fetching suggestions:", error);
     return [];
   }
 }
 
-async function renderSuggestions(query) {
-  const googleSuggestions = await fetchSuggestions(query);
-  const recentSearches = await getRecentSearches();
-
+function renderSuggestions(query, googleSuggestions = []) {
   suggestionsContainer.innerHTML = "";
+  suggestionFocusIndex = -1;
+
+  if (!query) {
+    suggestionsContainer.hidden = true;
+    return;
+  }
 
   const combinedSuggestions = [];
 
   // Add recent searches first (if they match the start of the query)
-  recentSearches.forEach(item => {
+  recentSearchesCache.forEach(item => {
     if (item.query.toLowerCase().startsWith(query.toLowerCase())) {
       combinedSuggestions.push({ text: item.query, isRecent: true });
     }
@@ -179,7 +220,7 @@ async function renderSuggestions(query) {
 
   // Add Google suggestions
   googleSuggestions.forEach(text => {
-    if (!combinedSuggestions.some(s => s.text === text)) {
+    if (!combinedSuggestions.some(s => s.text.toLowerCase() === text.toLowerCase())) {
       combinedSuggestions.push({ text: text, isRecent: false });
     }
   });
@@ -193,14 +234,23 @@ async function renderSuggestions(query) {
   combinedSuggestions.forEach((suggestion, index) => {
     const item = document.createElement("div");
     item.className = "suggestion-item";
-    item.innerHTML = `
-      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" class="${suggestion.isRecent ? 'recent-icon' : ''}">
-        ${suggestion.isRecent
-          ? '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>'
-          : '<circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 4.4 4.4"/>'}
-      </svg>
-      <span>${suggestion.text}</span>
-    `;
+    const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    icon.setAttribute("viewBox", "0 0 24 24");
+    icon.setAttribute("aria-hidden", "true");
+    if (suggestion.isRecent) icon.classList.add("recent-icon");
+
+    const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    circle.setAttribute("cx", suggestion.isRecent ? "11" : "10.8");
+    circle.setAttribute("cy", suggestion.isRecent ? "11" : "10.8");
+    circle.setAttribute("r", suggestion.isRecent ? "8" : "6.8");
+    icon.appendChild(circle);
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", suggestion.isRecent ? "m21 21-4.3-4.3" : "m16 16 4.4 4.4");
+    icon.appendChild(path);
+
+    const label = document.createElement("span");
+    label.textContent = suggestion.text;
+    item.append(icon, label);
     item.addEventListener("click", () => {
       searchInput.value = suggestion.text;
       document.querySelector("#search-form").dispatchEvent(new Event("submit"));
@@ -222,10 +272,36 @@ searchInput.addEventListener("input", () => {
   const query = searchInput.value.trim();
 
   clearTimeout(debounceTimer);
+  suggestionRequestId += 1;
+  const requestId = suggestionRequestId;
+  if (suggestionAbortController) {
+    suggestionAbortController.abort();
+    suggestionAbortController = null;
+  }
+
+  renderSuggestions(query, suggestionCache.get(query.toLowerCase()) || []);
+  if (!query) return;
+
   debounceTimer = window.setTimeout(async () => {
-    await renderSuggestions(query);
-  }, 200);
+    const controller = new AbortController();
+    suggestionAbortController = controller;
+    const googleSuggestions = await fetchSuggestions(query, controller.signal);
+    if (requestId !== suggestionRequestId || searchInput.value.trim() !== query) return;
+
+    suggestionCache.set(query.toLowerCase(), googleSuggestions);
+    renderSuggestions(query, googleSuggestions);
+  }, 80);
 });
+
+getRecentSearches()
+  .then((searches) => {
+    recentSearchesCache = searches.slice(0, 10);
+    const query = searchInput.value.trim();
+    if (query) {
+      renderSuggestions(query, suggestionCache.get(query.toLowerCase()) || []);
+    }
+  })
+  .catch((error) => console.error("Error loading recent searches:", error));
 
 searchInput.addEventListener("keydown", (e) => {
   const items = suggestionsContainer.querySelectorAll(".suggestion-item");
@@ -274,9 +350,20 @@ document.addEventListener("click", (e) => {
 
 // ... (rest of existing code)
 
-let remainingSeconds = 25 * 60;
+const timerStorageKey = "stillroom-focus-duration";
+const defaultTimerDuration = 25 * 60;
+let configuredTimerDuration = defaultTimerDuration;
+try {
+  const storedDuration = Number(window.localStorage.getItem(timerStorageKey));
+  if (Number.isInteger(storedDuration) && storedDuration > 0 && storedDuration <= 999 * 60 + 59) {
+    configuredTimerDuration = storedDuration;
+  }
+} catch (error) {
+  console.error("Couldn't load the saved focus duration:", error);
+}
+
+let remainingSeconds = configuredTimerDuration;
 let timerInterval = null;
-const timerDuration = 25 * 60;
 const circumference = 2 * Math.PI * 54;
 timerProgress.style.strokeDasharray = String(circumference);
 
@@ -284,7 +371,15 @@ function renderTimer() {
   const minutes = Math.floor(remainingSeconds / 60);
   const seconds = remainingSeconds % 60;
   timerDisplay.textContent = `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-  timerProgress.style.strokeDashoffset = String(circumference * (1 - remainingSeconds / timerDuration));
+  timerProgress.style.strokeDashoffset = String(circumference * (1 - remainingSeconds / configuredTimerDuration));
+}
+
+function stopTimer() {
+  if (timerInterval !== null) window.clearInterval(timerInterval);
+  timerInterval = null;
+  timerToggle.classList.remove("is-running");
+  timerToggle.setAttribute("aria-label", "Start focus timer");
+  timerToggle.title = "Start focus timer";
 }
 
 timerToggle.addEventListener("click", () => {
@@ -297,7 +392,7 @@ timerToggle.addEventListener("click", () => {
     return;
   }
 
-  if (remainingSeconds === 0) remainingSeconds = timerDuration;
+  if (remainingSeconds === 0) remainingSeconds = configuredTimerDuration;
   timerToggle.classList.add("is-running");
   timerToggle.setAttribute("aria-label", "Pause focus timer");
   timerToggle.title = "Pause focus timer";
@@ -315,15 +410,103 @@ timerToggle.addEventListener("click", () => {
   }, 1000);
 });
 
+timerEditButton.addEventListener("click", () => {
+  timerEditor.hidden = !timerEditor.hidden;
+  if (!timerEditor.hidden) {
+    timerMinutesInput.value = String(Math.floor(configuredTimerDuration / 60));
+    timerSecondsInput.value = String(configuredTimerDuration % 60);
+    timerMinutesInput.focus();
+  }
+});
+
+timerEditor.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const minutes = Number(timerMinutesInput.value);
+  const seconds = Number(timerSecondsInput.value);
+  if (!Number.isInteger(minutes) || minutes < 0 || minutes > 999
+    || !Number.isInteger(seconds) || seconds < 0 || seconds > 59) {
+    showToast("Enter minutes from 0–999 and seconds from 0–59");
+    return;
+  }
+  const duration = minutes * 60 + seconds;
+  if (duration <= 0) {
+    showToast("Timer duration must be at least one second");
+    return;
+  }
+
+  stopTimer();
+  configuredTimerDuration = duration;
+  remainingSeconds = duration;
+  try {
+    window.localStorage.setItem(timerStorageKey, String(duration));
+  } catch (error) {
+    console.error("Couldn't save the focus duration:", error);
+    showToast("Timer updated, but couldn't save it for next time");
+  }
+  renderTimer();
+  timerEditor.hidden = true;
+});
+
 document.querySelector("#timer-reset").addEventListener("click", () => {
-  if (timerInterval !== null) window.clearInterval(timerInterval);
-  timerInterval = null;
-  remainingSeconds = timerDuration;
-  timerToggle.classList.remove("is-running");
-  timerToggle.setAttribute("aria-label", "Start focus timer");
-  timerToggle.title = "Start focus timer";
+  stopTimer();
+  remainingSeconds = configuredTimerDuration;
   renderTimer();
 });
+
+const quoteStorageKey = "stillroom-quotes";
+let currentQuotes = { ...quoteDefaults };
+try {
+  const storedQuotes = JSON.parse(window.localStorage.getItem(quoteStorageKey) || "{}");
+  for (const key of Object.keys(quoteDefaults)) {
+    if (typeof storedQuotes[key] === "string") {
+      currentQuotes[key] = storedQuotes[key].slice(0, quoteInputs[key].maxLength);
+    }
+  }
+} catch (error) {
+  console.error("Couldn't load saved quotes:", error);
+}
+
+function renderQuotes() {
+  for (const key of Object.keys(quoteDefaults)) {
+    quoteInputs[key].value = currentQuotes[key];
+    quoteElements[key].textContent = currentQuotes[key];
+  }
+}
+
+function saveQuotes() {
+  try {
+    window.localStorage.setItem(quoteStorageKey, JSON.stringify(currentQuotes));
+    return true;
+  } catch (error) {
+    console.error("Couldn't save quotes:", error);
+    showToast("Couldn't save your quote changes");
+    return false;
+  }
+}
+
+for (const key of Object.keys(quoteDefaults)) {
+  quoteInputs[key].addEventListener("input", () => {
+    quoteElements[key].textContent = quoteInputs[key].value;
+  });
+  quoteInputs[key].addEventListener("change", () => {
+    currentQuotes[key] = quoteInputs[key].value.trim().slice(0, quoteInputs[key].maxLength);
+    quoteInputs[key].value = currentQuotes[key];
+    quoteElements[key].textContent = currentQuotes[key];
+    saveQuotes();
+  });
+}
+
+document.querySelectorAll(".quote-reset").forEach((button) => {
+  button.addEventListener("click", () => {
+    const key = button.dataset.quoteReset;
+    if (!Object.hasOwn(quoteDefaults, key)) return;
+    currentQuotes[key] = quoteDefaults[key];
+    quoteInputs[key].value = quoteDefaults[key];
+    quoteElements[key].textContent = quoteDefaults[key];
+    saveQuotes();
+  });
+});
+renderQuotes();
 
 function showToast(message) {
   toastElement.textContent = message;
@@ -356,7 +539,7 @@ let editingWallpaper = null;
 
 function openWallpaperDatabase() {
   return new Promise((resolve, reject) => {
-    const request = window.indexedDB.open(wallpaperDatabaseName, 1);
+    const request = window.indexedDB.open(wallpaperDatabaseName, 2);
     request.onupgradeneeded = () => {
       const database = request.result;
       if (!database.objectStoreNames.contains("wallpapers")) {
@@ -364,6 +547,9 @@ function openWallpaperDatabase() {
       }
       if (!database.objectStoreNames.contains("preferences")) {
         database.createObjectStore("preferences", { keyPath: "key" });
+      }
+      if (!database.objectStoreNames.contains("music-tracks")) {
+        database.createObjectStore("music-tracks", { keyPath: "id" });
       }
     };
     request.onsuccess = () => resolve(request.result);
@@ -427,6 +613,335 @@ function deleteSavedWallpaper(id, settings) {
     transaction.onabort = () => reject(transaction.error || new Error("Deleting the wallpaper was interrupted."));
   }));
 }
+
+const builtinRainTrack = {
+  id: "builtin-rain",
+  name: "Rain",
+  createdAt: 0,
+  isBuiltin: true
+};
+let savedMusicTracks = [];
+let defaultMusicId = builtinRainTrack.id;
+let activeMusicTrackId = null;
+let musicVolumeLevel = 0.5;
+const musicTrackUrls = new Map();
+
+function readMusicLibrary() {
+  return wallpaperDatabase.then((database) => new Promise((resolve, reject) => {
+    const transaction = database.transaction(["music-tracks", "preferences"], "readonly");
+    const tracksRequest = transaction.objectStore("music-tracks").getAll();
+    const settingsRequest = transaction.objectStore("preferences").get("music-settings");
+    transaction.oncomplete = () => resolve({
+      tracks: tracksRequest.result,
+      settings: settingsRequest.result
+    });
+    transaction.onerror = () => reject(transaction.error || new Error("Could not read saved music."));
+    transaction.onabort = () => reject(transaction.error || new Error("Reading saved music was interrupted."));
+  }));
+}
+
+function saveMusicTrack(track) {
+  return wallpaperDatabase.then((database) => new Promise((resolve, reject) => {
+    const transaction = database.transaction("music-tracks", "readwrite");
+    transaction.objectStore("music-tracks").put(track);
+    transaction.oncomplete = resolve;
+    transaction.onerror = () => reject(transaction.error || new Error("Could not save the music track."));
+    transaction.onabort = () => reject(transaction.error || new Error("Saving the music track was interrupted."));
+  }));
+}
+
+function saveMusicSettings() {
+  return wallpaperDatabase.then((database) => new Promise((resolve, reject) => {
+    const transaction = database.transaction("preferences", "readwrite");
+    transaction.objectStore("preferences").put({
+      key: "music-settings",
+      defaultId: defaultMusicId,
+      volume: musicVolumeLevel,
+      loop: musicLoop.checked
+    });
+    transaction.oncomplete = resolve;
+    transaction.onerror = () => reject(transaction.error || new Error("Could not save music settings."));
+    transaction.onabort = () => reject(transaction.error || new Error("Saving music settings was interrupted."));
+  }));
+}
+
+function deleteMusicTrack(id) {
+  return wallpaperDatabase.then((database) => new Promise((resolve, reject) => {
+    const transaction = database.transaction(["music-tracks", "preferences"], "readwrite");
+    transaction.objectStore("music-tracks").delete(id);
+    transaction.objectStore("preferences").put({
+      key: "music-settings",
+      defaultId: defaultMusicId,
+      volume: musicVolumeLevel,
+      loop: musicLoop.checked
+    });
+    transaction.oncomplete = resolve;
+    transaction.onerror = () => reject(transaction.error || new Error("Could not delete the music track."));
+    transaction.onabort = () => reject(transaction.error || new Error("Deleting the music track was interrupted."));
+  }));
+}
+
+async function stopAmbientSound() {
+  if (noiseSource) noiseSource.stop();
+  if (audioContext) await audioContext.close();
+  audioContext = null;
+  noiseSource = null;
+  noiseFilter = null;
+  noiseGain = null;
+}
+
+function updateSoundToggle(isPlaying, label) {
+  soundToggle.setAttribute("aria-pressed", String(isPlaying));
+  soundToggle.setAttribute("aria-label", label);
+  soundToggle.title = label;
+}
+
+function renderMusicTracks() {
+  musicTrackList.replaceChildren();
+  const tracks = [builtinRainTrack, ...savedMusicTracks]
+    .sort((first, second) => Number(second.isBuiltin) - Number(first.isBuiltin) || second.createdAt - first.createdAt);
+  for (const track of tracks) {
+    const row = document.createElement("div");
+    row.className = "music-track";
+    if (track.id === defaultMusicId) row.classList.add("is-default");
+
+    const nameInput = document.createElement("input");
+    nameInput.className = "music-track-name";
+    nameInput.type = "text";
+    nameInput.value = track.name;
+    nameInput.setAttribute("aria-label", `Name for ${track.name}`);
+    nameInput.readOnly = track.isBuiltin;
+    if (!track.isBuiltin) {
+      nameInput.addEventListener("change", async () => {
+        const updatedTrack = { ...track, name: nameInput.value.trim() || "Untitled track" };
+        try {
+          await saveMusicTrack(updatedTrack);
+          savedMusicTracks = savedMusicTracks.map((item) => item.id === track.id ? updatedTrack : item);
+          renderMusicTracks();
+        } catch (error) {
+          wallpaperNotice.textContent = `Couldn't rename track: ${error.message}`;
+          wallpaperNotice.hidden = false;
+        }
+      });
+    }
+
+    const trackActions = document.createElement("div");
+    trackActions.className = "music-track-actions";
+    const playButton = document.createElement("button");
+    playButton.className = "wallpaper-action secondary";
+    playButton.type = "button";
+    const isPlaying = track.isBuiltin
+      ? activeMusicTrackId === track.id && audioContext?.state === "running"
+      : activeMusicTrackId === track.id && !musicPlayer.paused;
+    playButton.textContent = isPlaying ? "Pause" : "Play";
+    playButton.setAttribute("aria-label", `${playButton.textContent} ${track.name}`);
+    playButton.addEventListener("click", async () => {
+      try {
+        const currentlyPlaying = track.isBuiltin
+          ? activeMusicTrackId === track.id && audioContext?.state === "running"
+          : activeMusicTrackId === track.id && !musicPlayer.paused;
+        if (currentlyPlaying) {
+          if (track.isBuiltin) await stopAmbientSound();
+          else musicPlayer.pause();
+          activeMusicTrackId = null;
+          updateSoundToggle(false, "Toggle ambient sound");
+          renderMusicTracks();
+          return;
+        }
+        if (track.isBuiltin) await playAmbientRain();
+        else await playMusicTrack(track);
+      } catch (error) {
+        showToast(`Couldn't play track: ${error.message}`);
+      }
+    });
+
+    const defaultButton = document.createElement("button");
+    defaultButton.className = "wallpaper-action secondary";
+    defaultButton.type = "button";
+    defaultButton.textContent = track.id === defaultMusicId ? "Default" : "Set default";
+    defaultButton.disabled = track.id === defaultMusicId;
+    defaultButton.addEventListener("click", async () => {
+      const previousDefaultId = defaultMusicId;
+      defaultMusicId = track.id;
+      try {
+        await saveMusicSettings();
+        renderMusicTracks();
+        showToast("Default music updated");
+      } catch (error) {
+        defaultMusicId = previousDefaultId;
+        showToast(`Couldn't save music settings: ${error.message}`);
+      }
+    });
+
+    trackActions.append(playButton, defaultButton);
+    if (!track.isBuiltin) {
+        const deleteButton = document.createElement("button");
+        deleteButton.className = "wallpaper-action danger";
+        deleteButton.type = "button";
+        deleteButton.textContent = "Delete";
+        deleteButton.addEventListener("click", async () => {
+          const previousDefaultId = defaultMusicId;
+          if (defaultMusicId === track.id) defaultMusicId = builtinRainTrack.id;
+          try {
+            if (activeMusicTrackId === track.id) {
+              musicPlayer.pause();
+              musicPlayer.removeAttribute("src");
+              musicPlayer.load();
+              activeMusicTrackId = null;
+              updateSoundToggle(false, "Toggle ambient sound");
+            }
+            await deleteMusicTrack(track.id);
+            savedMusicTracks = savedMusicTracks.filter((item) => item.id !== track.id);
+            const objectUrl = musicTrackUrls.get(track.id);
+            if (objectUrl) URL.revokeObjectURL(objectUrl);
+            musicTrackUrls.delete(track.id);
+            renderMusicTracks();
+            showToast("Music track deleted");
+          } catch (error) {
+            defaultMusicId = previousDefaultId;
+            showToast(`Couldn't delete track: ${error.message}`);
+          }
+        });
+        trackActions.append(deleteButton);
+    }
+    row.append(nameInput, trackActions);
+    if (track.id === defaultMusicId) {
+        const badge = document.createElement("span");
+        badge.className = "music-track-badge";
+        badge.textContent = track.isBuiltin ? "Built-in • used by sound button" : "Used by sound button";
+      row.append(badge);
+    }
+    musicTrackList.append(row);
+  }
+}
+
+async function playMusicTrack(track) {
+  await stopAmbientSound();
+  musicPlayer.pause();
+  activeMusicTrackId = null;
+  updateSoundToggle(false, "Toggle ambient sound");
+  let objectUrl = musicTrackUrls.get(track.id);
+  if (!objectUrl) {
+    objectUrl = URL.createObjectURL(track.blob);
+    musicTrackUrls.set(track.id, objectUrl);
+  }
+  if (musicPlayer.src !== objectUrl) musicPlayer.src = objectUrl;
+  musicPlayer.volume = musicVolumeLevel;
+  musicPlayer.loop = musicLoop.checked;
+  await musicPlayer.play();
+  activeMusicTrackId = track.id;
+  updateSoundToggle(true, "Stop custom music");
+  renderMusicTracks();
+}
+
+async function playAmbientRain() {
+  if (typeof window.AudioContext !== "function") {
+    throw new Error("Ambient sound isn't supported in this browser");
+  }
+
+  await stopAmbientSound();
+  musicPlayer.pause();
+  activeMusicTrackId = null;
+  audioContext = new AudioContext();
+  try {
+    const noiseBuffer = audioContext.createBuffer(1, audioContext.sampleRate * 3, audioContext.sampleRate);
+    const samples = noiseBuffer.getChannelData(0);
+    for (let index = 0; index < samples.length; index += 1) {
+      samples[index] = Math.random() * 2 - 1;
+    }
+
+    noiseSource = audioContext.createBufferSource();
+    noiseFilter = audioContext.createBiquadFilter();
+    noiseGain = audioContext.createGain();
+    noiseSource.buffer = noiseBuffer;
+    noiseSource.loop = true;
+    noiseFilter.type = "lowpass";
+    noiseFilter.frequency.value = 720;
+    noiseGain.gain.value = 0.018 * musicVolumeLevel;
+    noiseSource.connect(noiseFilter);
+    noiseFilter.connect(noiseGain);
+    noiseGain.connect(audioContext.destination);
+    await audioContext.resume();
+    noiseSource.start();
+    activeMusicTrackId = builtinRainTrack.id;
+    updateSoundToggle(true, "Stop rain sounds");
+    renderMusicTracks();
+  } catch (error) {
+    await stopAmbientSound();
+    throw error;
+  }
+}
+
+async function initializeMusicSettings() {
+  const state = await readMusicLibrary();
+  savedMusicTracks = state.tracks;
+  const settings = state.settings || {};
+  defaultMusicId = settings.defaultId === builtinRainTrack.id
+    || savedMusicTracks.some((track) => track.id === settings.defaultId)
+    ? settings.defaultId
+    : builtinRainTrack.id;
+  musicVolumeLevel = Number.isFinite(Number(settings.volume))
+    ? Math.min(1, Math.max(0, Number(settings.volume)))
+    : 0.5;
+  musicVolume.value = String(Math.round(musicVolumeLevel * 100));
+  musicVolumeValue.value = `${musicVolume.value}%`;
+  musicVolumeValue.textContent = `${musicVolume.value}%`;
+  musicLoop.checked = settings.loop !== false;
+  musicPlayer.volume = musicVolumeLevel;
+  musicPlayer.loop = musicLoop.checked;
+  renderMusicTracks();
+  if (settings.defaultId !== defaultMusicId) {
+    saveMusicSettings().catch((error) => showToast(`Couldn't save music settings: ${error.message}`));
+  }
+}
+
+function isSupportedAudioFile(file) {
+  return file.type.toLowerCase().startsWith("audio/")
+    || /\.(mp3|m4a|aac|wav|ogg|oga|flac|opus|weba)$/i.test(file.name);
+}
+
+musicUpload.addEventListener("change", async () => {
+  const file = musicUpload.files && musicUpload.files[0];
+  if (!file) return;
+  musicUpload.value = "";
+  if (!isSupportedAudioFile(file)) {
+    wallpaperNotice.textContent = "Choose a supported audio file to upload";
+    wallpaperNotice.hidden = false;
+    return;
+  }
+
+  const track = {
+    id: crypto.randomUUID(),
+    name: file.name.replace(/\.[^.]+$/, "") || "Uploaded music",
+    blob: file,
+    createdAt: Date.now()
+  };
+  try {
+    await saveMusicTrack(track);
+    savedMusicTracks.push(track);
+    renderMusicTracks();
+    wallpaperNotice.textContent = "Music added to your library";
+    wallpaperNotice.hidden = false;
+  } catch (error) {
+    wallpaperNotice.textContent = `Couldn't upload music: ${error.message}`;
+    wallpaperNotice.hidden = false;
+  }
+});
+
+musicVolume.addEventListener("input", () => {
+  musicVolumeLevel = Number(musicVolume.value) / 100;
+  musicVolumeValue.value = `${musicVolume.value}%`;
+  musicVolumeValue.textContent = `${musicVolume.value}%`;
+  musicPlayer.volume = musicVolumeLevel;
+  if (noiseGain) noiseGain.gain.value = 0.018 * musicVolumeLevel;
+});
+musicVolume.addEventListener("change", () => {
+  saveMusicSettings().catch((error) => showToast(`Couldn't save music settings: ${error.message}`));
+});
+musicLoop.addEventListener("change", () => {
+  musicPlayer.loop = musicLoop.checked;
+  saveMusicSettings().catch((error) => showToast(`Couldn't save music settings: ${error.message}`));
+});
 
 function normalizeRotation(value) {
   const quarterTurns = Math.round((Number(value) || 0) / 90);
@@ -625,7 +1140,47 @@ function showWallpaperLibrary() {
   wallpaperDeleteConfirm.hidden = true;
   wallpaperEditor.hidden = true;
   wallpaperLibrary.hidden = false;
+  musicLibrary.hidden = true;
+  quotesLibrary.hidden = true;
+  wallpaperSettingsTab.classList.add("is-active");
+  wallpaperSettingsTab.setAttribute("aria-current", "page");
+  musicSettingsTab.classList.remove("is-active");
+  musicSettingsTab.removeAttribute("aria-current");
+  quotesSettingsTab.classList.remove("is-active");
+  quotesSettingsTab.removeAttribute("aria-current");
   wallpaperDialog.style.display = 'grid';
+}
+
+function showMusicLibrary() {
+  wallpaperNotice.hidden = true;
+  wallpaperNotice.textContent = "";
+  wallpaperEditor.hidden = true;
+  wallpaperLibrary.hidden = true;
+  musicLibrary.hidden = false;
+  quotesLibrary.hidden = true;
+  wallpaperSettingsTab.classList.remove("is-active");
+  wallpaperSettingsTab.removeAttribute("aria-current");
+  musicSettingsTab.classList.add("is-active");
+  musicSettingsTab.setAttribute("aria-current", "page");
+  quotesSettingsTab.classList.remove("is-active");
+  quotesSettingsTab.removeAttribute("aria-current");
+  wallpaperDialog.style.display = "grid";
+}
+
+function showQuotesLibrary() {
+  wallpaperNotice.hidden = true;
+  wallpaperNotice.textContent = "";
+  wallpaperEditor.hidden = true;
+  wallpaperLibrary.hidden = true;
+  musicLibrary.hidden = true;
+  quotesLibrary.hidden = false;
+  wallpaperSettingsTab.classList.remove("is-active");
+  wallpaperSettingsTab.removeAttribute("aria-current");
+  musicSettingsTab.classList.remove("is-active");
+  musicSettingsTab.removeAttribute("aria-current");
+  quotesSettingsTab.classList.add("is-active");
+  quotesSettingsTab.setAttribute("aria-current", "page");
+  wallpaperDialog.style.display = "grid";
 }
 
 async function initializeWallpaperSettings() {
@@ -650,6 +1205,8 @@ async function initializeWallpaperSettings() {
 
 const wallpaperReady = initializeWallpaperSettings();
 wallpaperReady.catch((error) => showToast(`Couldn't load wallpaper settings: ${error.message}`));
+const musicReady = initializeMusicSettings();
+musicReady.catch((error) => showToast(`Couldn't load music settings: ${error.message}`));
 
 const settingsToggle = document.querySelector("#settings-toggle");
 settingsToggle.addEventListener("click", async () => {
@@ -662,7 +1219,7 @@ settingsToggle.addEventListener("click", async () => {
     }
 
     // 2. Handle opening
-    await wallpaperReady;
+    await Promise.all([wallpaperReady, musicReady]);
     renderWallpaperGrid();
     showWallpaperLibrary();
 
@@ -673,6 +1230,25 @@ settingsToggle.addEventListener("click", async () => {
     console.error("Settings toggle error:", error);
     showToast(`Couldn't open wallpaper settings: ${error.message}`);
   }
+});
+
+wallpaperSettingsTab.addEventListener("click", () => {
+  renderWallpaperGrid();
+  showWallpaperLibrary();
+});
+
+musicSettingsTab.addEventListener("click", async () => {
+  try {
+    await musicReady;
+    renderMusicTracks();
+    showMusicLibrary();
+  } catch (error) {
+    showToast(`Couldn't load music settings: ${error.message}`);
+  }
+});
+
+quotesSettingsTab.addEventListener("click", () => {
+  showQuotesLibrary();
 });
 
 // Absolute override for the cancel button in the editor
@@ -930,54 +1506,71 @@ let noiseSource = null;
 let noiseFilter = null;
 let noiseGain = null;
 
+musicPlayer.addEventListener("ended", () => {
+  activeMusicTrackId = null;
+  updateSoundToggle(false, "Toggle ambient sound");
+  renderMusicTracks();
+});
+
+musicPlayer.addEventListener("error", () => {
+  if (activeMusicTrackId) {
+    activeMusicTrackId = null;
+    updateSoundToggle(false, "Toggle ambient sound");
+    renderMusicTracks();
+    showToast("This audio file couldn't be played");
+  }
+});
+
 soundToggle.addEventListener("click", async () => {
   if (soundToggle.getAttribute("aria-pressed") === "true") {
-    noiseSource.stop();
-    await audioContext.close();
-    audioContext = null;
-    noiseSource = null;
-    noiseFilter = null;
-    noiseGain = null;
-    soundToggle.setAttribute("aria-pressed", "false");
-    showToast("Ambient sound off");
+    if (activeMusicTrackId === builtinRainTrack.id) {
+      await stopAmbientSound();
+      activeMusicTrackId = null;
+      updateSoundToggle(false, "Toggle ambient sound");
+      renderMusicTracks();
+      showToast("Rain sounds off");
+    } else if (activeMusicTrackId) {
+      musicPlayer.pause();
+      activeMusicTrackId = null;
+      updateSoundToggle(false, "Toggle ambient sound");
+      renderMusicTracks();
+      showToast("Music paused");
+    } else {
+      await stopAmbientSound();
+      updateSoundToggle(false, "Toggle ambient sound");
+      showToast("Ambient sound off");
+    }
     return;
   }
 
-  if (typeof window.AudioContext !== "function") {
-    showToast("Ambient sound isn't supported in this browser");
+  if (defaultMusicId === builtinRainTrack.id) {
+    try {
+      await playAmbientRain();
+      showToast("Rain sounds on");
+    } catch (error) {
+      showToast(`Couldn't start rain sounds: ${error.message}`);
+    }
     return;
+  }
+
+  if (defaultMusicId) {
+    const defaultTrack = savedMusicTracks.find((track) => track.id === defaultMusicId);
+    if (defaultTrack) {
+      try {
+        await playMusicTrack(defaultTrack);
+        showToast(`Playing ${defaultTrack.name}`);
+      } catch (error) {
+        showToast(`Couldn't play track: ${error.message}`);
+      }
+      return;
+    }
   }
 
   try {
-    audioContext = new AudioContext();
-    const noiseBuffer = audioContext.createBuffer(1, audioContext.sampleRate * 3, audioContext.sampleRate);
-    const samples = noiseBuffer.getChannelData(0);
-    for (let index = 0; index < samples.length; index += 1) {
-      samples[index] = Math.random() * 2 - 1;
-    }
-
-    noiseSource = audioContext.createBufferSource();
-    noiseFilter = audioContext.createBiquadFilter();
-    noiseGain = audioContext.createGain();
-    noiseSource.buffer = noiseBuffer;
-    noiseSource.loop = true;
-    noiseFilter.type = "lowpass";
-    noiseFilter.frequency.value = 720;
-    noiseGain.gain.value = 0.018;
-    noiseSource.connect(noiseFilter);
-    noiseFilter.connect(noiseGain);
-    noiseGain.connect(audioContext.destination);
-    await audioContext.resume();
-    noiseSource.start();
-    soundToggle.setAttribute("aria-pressed", "true");
-    showToast("Soft rain sounds on");
+    await playAmbientRain();
+    showToast("Rain sounds on");
   } catch (error) {
-    if (audioContext !== null) await audioContext.close();
-    audioContext = null;
-    noiseSource = null;
-    noiseFilter = null;
-    noiseGain = null;
-    showToast(`Couldn't start ambient sound: ${error.message}`);
+    showToast(`Couldn't start rain sounds: ${error.message}`);
   }
 });
 

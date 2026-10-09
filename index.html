@@ -32,8 +32,8 @@
         <div class="weather" aria-label="A little weather-inspired note">
           <span class="weather-icon" aria-hidden="true">☀</span>
           <span class="weather-copy">
-            <strong>Make today yours</strong>
-            <span>A little space to think, wherever you are</span>
+            <strong id="quote-title">Make today yours</strong>
+            <span id="quote-subtitle">A little space to think, wherever you are</span>
           </span>
         </div>
 
@@ -74,7 +74,7 @@
 
       <section class="welcome" aria-label="Welcome">
         <h1 id="greeting">Good day</h1>
-        <p>Take a breath. You're right where you need to be.</p>
+        <p id="quote-welcome">Take a breath. You're right where you need to be.</p>
       </section>
 
       <section class="focus-widget" aria-label="Focus timer">
@@ -96,7 +96,18 @@
           <button class="reset-button" id="timer-reset" type="button" aria-label="Reset focus timer" title="Reset focus timer">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.8-4L3 10"/><path d="M3 5v5h5M4 13a8 8 0 0 0 14.8 4L21 14"/><path d="M21 19v-5h-5"/></svg>
           </button>
+          <button class="timer-edit-button" id="timer-edit" type="button" aria-label="Edit focus timer" title="Edit focus timer">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 5 5 5M4 20l4.2-.9L19 8.3a2.1 2.1 0 0 0-3-3L5.2 16.1 4 20Z"/></svg>
+          </button>
         </div>
+        <form class="timer-editor" id="timer-editor" hidden>
+          <span class="timer-editor-title">Set focus duration</span>
+          <div class="timer-editor-fields">
+            <label>Minutes<input id="timer-minutes" type="number" min="0" max="999" step="1" value="25" required></label>
+            <label>Seconds<input id="timer-seconds" type="number" min="0" max="59" step="1" value="0" required></label>
+          </div>
+          <button type="submit">Set timer</button>
+        </form>
       </section>
 
       <div class="scene-caption" aria-hidden="true">A quiet place to begin</div>
@@ -105,9 +116,17 @@
       <dialog class="wallpaper-dialog" id="wallpaper-dialog" aria-labelledby="wallpaper-dialog-title">
         <nav class="settings-sidebar" aria-label="Settings sections">
           <span class="settings-sidebar-label">SETTINGS</span>
-          <button class="settings-nav-item is-active" type="button" aria-current="page">
+          <button class="settings-nav-item is-active" id="wallpaper-settings-tab" type="button" aria-current="page">
             <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9" r="1.5"/><path d="m21 15-5-5L5 20"/></svg>
             <span>Wallpaper</span>
+          </button>
+          <button class="settings-nav-item" id="music-settings-tab" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+            <span>Music</span>
+          </button>
+          <button class="settings-nav-item" id="quotes-settings-tab" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4V5Z"/><path d="M8 9h8M8 12h5"/></svg>
+            <span>Quotes</span>
           </button>
         </nav>
         <section class="settings-content">
@@ -133,6 +152,57 @@
               </div>
             </div>
             <div class="wallpaper-grid" id="wallpaper-grid" aria-label="Available wallpapers"></div>
+          </section>
+
+          <section class="music-library" id="music-library" aria-labelledby="music-section-title" hidden>
+            <div class="wallpaper-section-header">
+              <div>
+                <h3 id="music-section-title">Your music</h3>
+                <p>Upload tracks, preview them, and choose what plays from the sound button.</p>
+              </div>
+              <div class="upload-actions">
+                <label class="upload-button" for="music-upload">＋ Upload music</label>
+                <input class="visually-hidden" id="music-upload" type="file" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.oga,.flac,.opus">
+              </div>
+            </div>
+            <div class="music-controls">
+              <label class="adjustment-control" for="music-volume">
+                <span>Volume <output id="music-volume-value" for="music-volume">50%</output></span>
+                <input id="music-volume" type="range" min="0" max="100" step="1" value="50">
+              </label>
+              <label class="music-loop-control" for="music-loop">
+                <input id="music-loop" type="checkbox" checked>
+                <span>Repeat track</span>
+              </label>
+            </div>
+            <div class="music-track-list" id="music-track-list" aria-label="Uploaded music tracks"></div>
+            <audio id="custom-music-player" preload="none"></audio>
+          </section>
+
+          <section class="quotes-library" id="quotes-library" aria-labelledby="quotes-section-title" hidden>
+            <div class="wallpaper-section-header">
+              <div>
+                <h3 id="quotes-section-title">Your quotes</h3>
+                <p>Personalize each message on your new-tab page. Reset any one to its original text.</p>
+              </div>
+            </div>
+            <div class="quote-setting-list">
+              <div class="quote-setting">
+                <label for="quote-welcome-input">Welcome message</label>
+                <input id="quote-welcome-input" type="text" maxlength="160">
+                <button class="wallpaper-action secondary quote-reset" type="button" data-quote-reset="welcome">Reset</button>
+              </div>
+              <div class="quote-setting">
+                <label for="quote-title-input">Main quote</label>
+                <input id="quote-title-input" type="text" maxlength="100">
+                <button class="wallpaper-action secondary quote-reset" type="button" data-quote-reset="title">Reset</button>
+              </div>
+              <div class="quote-setting">
+                <label for="quote-subtitle-input">Supporting quote</label>
+                <input id="quote-subtitle-input" type="text" maxlength="160">
+                <button class="wallpaper-action secondary quote-reset" type="button" data-quote-reset="subtitle">Reset</button>
+              </div>
+            </div>
           </section>
 
           <section class="wallpaper-editor" id="wallpaper-editor" aria-labelledby="wallpaper-editor-title" hidden>
