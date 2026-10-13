@@ -1,6 +1,7 @@
 // DOM Elements
 const clockElement = document.querySelector("#clock");
 const dateElement = document.querySelector("#date");
+const weatherIcon = document.querySelector("#weather-icon");
 const greetingElement = document.querySelector("#greeting");
 const timerDisplay = document.querySelector("#timer-display");
 const timerProgress = document.querySelector("#timer-progress");
@@ -14,7 +15,8 @@ const toastElement = document.querySelector("#toast");
 const wallpaperDialog = document.querySelector("#wallpaper-dialog");
 const wallpaperLibrary = document.querySelector("#wallpaper-library");
 const wallpaperEditor = document.querySelector("#wallpaper-editor");
-const wallpaperGrid = document.querySelector("#wallpaper-grid");
+const systemWallpaperGrid = document.querySelector("#system-wallpaper-grid");
+const userWallpaperGrid = document.querySelector("#user-wallpaper-grid");
 const wallpaperPreview = document.querySelector("#wallpaper-preview");
 const wallpaperPreviewInner = document.querySelector("#wallpaper-preview-inner");
 const wallpaperImageUpload = document.querySelector("#wallpaper-upload-image");
@@ -29,6 +31,20 @@ const wallpaperBrightnessValue = document.querySelector("#wallpaper-brightness-v
 const wallpaperDeleteButton = document.querySelector("#wallpaper-delete");
 const wallpaperDeleteConfirm = document.querySelector("#wallpaper-delete-confirm");
 const wallpaperNameInput = document.querySelector("#wallpaper-name-input");
+const settingsResetConfirm = document.querySelector("#settings-reset-confirm");
+const settingsResetBackdrop = document.querySelector("#settings-reset-backdrop");
+const settingsResetCopy = document.querySelector("#settings-reset-copy");
+const settingsResetNoButton = document.querySelector("#settings-reset-no");
+const settingsResetYesButton = document.querySelector("#settings-reset-yes");
+const settingsResetDeleteOption = document.querySelector("#settings-reset-delete-option");
+const settingsResetDeleteUploads = document.querySelector("#settings-reset-delete-uploads");
+const settingsResetDeleteLabel = document.querySelector("#settings-reset-delete-label");
+const wallpaperContextMenu = document.querySelector("#wallpaper-context-menu");
+const wallpaperUrlForm = document.querySelector("#wallpaper-url-fetch");
+const wallpaperUrlInput = document.querySelector("#wallpaper-url");
+const wallpaperUrlFetchButton = document.querySelector("#wallpaper-url-fetch-button");
+let pendingSettingsReset = null;
+let settingsResetTrigger = null;
 const wallpaperSettingsTab = document.querySelector("#wallpaper-settings-tab");
 const musicSettingsTab = document.querySelector("#music-settings-tab");
 const quotesSettingsTab = document.querySelector("#quotes-settings-tab");
@@ -80,7 +96,8 @@ function updateClock() {
   dateElement.textContent = new Intl.DateTimeFormat(undefined, {
     weekday: "long",
     month: "long",
-    day: "numeric"
+    day: "numeric",
+    year: "numeric"
   }).format(now);
 
   const hour = now.getHours();
@@ -89,6 +106,79 @@ function updateClock() {
 
 updateClock();
 window.setInterval(updateClock, 1000);
+
+const weatherSymbols = [
+  [[0], "☀", "Clear"],
+  [[1, 2], "⛅", "Partly cloudy"],
+  [[3], "☁", "Cloudy"],
+  [[45, 48], "🌫", "Foggy"],
+  [[51, 53, 55, 56, 57], "🌦", "Drizzle"],
+  [[61, 63, 65, 66, 67, 80, 81, 82], "🌧", "Rain"],
+  [[71, 73, 75, 77, 85, 86], "❄", "Snow"],
+  [[95, 96, 99], "⛈", "Thunderstorms"]
+];
+
+function updateWeatherIcon(weatherCode) {
+  const weather = weatherSymbols.find(([codes]) => codes.includes(weatherCode));
+  if (!weather) throw new Error(`Unsupported weather code: ${weatherCode}`);
+  weatherIcon.textContent = weather[1];
+  weatherIcon.title = weather[2];
+  weatherIcon.parentElement.setAttribute("aria-label", `Current local weather: ${weather[2]}`);
+}
+
+async function loadWeatherForCoordinates(latitude, longitude) {
+  const endpoint = new URL("https://api.open-meteo.com/v1/forecast");
+  endpoint.search = new URLSearchParams({
+    latitude: String(latitude),
+    longitude: String(longitude),
+    current: "weather_code"
+  }).toString();
+  const response = await fetch(endpoint);
+  if (!response.ok) throw new Error(`Weather request failed with status ${response.status}`);
+  const data = await response.json();
+  const weatherCode = data.current && data.current.weather_code;
+  if (!Number.isInteger(weatherCode)) throw new Error("Weather response did not include a valid condition");
+  updateWeatherIcon(weatherCode);
+  localStorage.setItem("stillroom-weather-cache", JSON.stringify({
+    latitude,
+    longitude,
+    weatherCode,
+    savedAt: Date.now()
+  }));
+}
+
+function updateWeatherFromLocation() {
+  let cachedWeather;
+  try {
+    cachedWeather = JSON.parse(localStorage.getItem("stillroom-weather-cache") || "null");
+  } catch (error) {
+    console.warn("Could not read cached weather:", error);
+  }
+
+  const cacheIsFresh = cachedWeather
+    && Number.isInteger(cachedWeather.weatherCode)
+    && weatherSymbols.some(([codes]) => codes.includes(cachedWeather.weatherCode))
+    && Number.isFinite(cachedWeather.savedAt)
+    && Date.now() - cachedWeather.savedAt < 30 * 60 * 1000;
+  if (cacheIsFresh) {
+    updateWeatherIcon(cachedWeather.weatherCode);
+    return;
+  }
+
+  if (!navigator.geolocation) {
+    console.warn("Weather icon was not updated: geolocation is unavailable.");
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    ({ coords }) => loadWeatherForCoordinates(coords.latitude, coords.longitude)
+      .catch((error) => console.warn("Weather icon was not updated:", error)),
+    (error) => console.warn("Weather icon was not updated because location is unavailable:", error.message),
+    { enableHighAccuracy: false, maximumAge: 30 * 60 * 1000, timeout: 10000 }
+  );
+}
+
+updateWeatherFromLocation();
 
 // ... (existing code before search form submit)
 
@@ -523,19 +613,33 @@ saveToggle.addEventListener("click", () => {
 
 const wallpaperDatabaseName = "stillroom-wallpapers";
 const builtinWallpaperId = "builtin-default";
-const builtinWallpaper = {
-  id: builtinWallpaperId,
-  name: "Default wallpaper",
-  imageUrl: "wallpaper.svg",
+const systemWallpaperPresets = [
+  { id: builtinWallpaperId, name: "Wallpaper", imageUrl: "assets/wallpaper.jpg" },
+  { id: "builtin-spiderman", name: "Spiderman", imageUrl: "assets/spiderman.jpg" },
+  { id: "builtin-shinchan-pool", name: "Shinchan Pool", imageUrl: "assets/shinchan-pool.jpg" },
+  { id: "builtin-japanese-arch", name: "Japanese Arch", imageUrl: "assets/japanese_arch.jpg" },
+  { id: "builtin-green-house", name: "Green House", imageUrl: "assets/green-house.jpg" },
+  { id: "builtin-ghost-rider", name: "Ghost Rider", imageUrl: "assets/ghostRider.jpg" },
+  { id: "builtin-doom", name: "Doom", imageUrl: "assets/doom.jpg" },
+  { id: "builtin-anime-girl-rain", name: "Anime Girl Rain", imageUrl: "assets/animeGirl-rain.jpg" },
+  { id: "builtin-anime-boy-bus", name: "Anime Boy Bus", imageUrl: "assets/animeBoy-bus.jpg" }
+].map((wallpaper) => ({
+  ...wallpaper,
   zoom: 1.015,
   rotation: 0,
   brightness: 100,
   isBuiltin: true
-};
+}));
+const builtinWallpaper = systemWallpaperPresets[0];
 let savedWallpapers = [];
 let defaultWallpaperId = builtinWallpaperId;
 let activeWallpaperId = builtinWallpaperId;
 let editingWallpaper = null;
+let systemWallpaperOrder = systemWallpaperPresets.map((wallpaper) => wallpaper.id);
+let userWallpaperOrder = [];
+let draggedWallpaper = null;
+let suppressReorderClick = false;
+const wallpaperReorderAnimationDuration = 180;
 
 function openWallpaperDatabase() {
   return new Promise((resolve, reject) => {
@@ -581,11 +685,53 @@ function saveWallpaper(record, settings) {
     transaction.objectStore("preferences").put({
       key: "wallpaper-settings",
       activeId: settings.activeId,
-      defaultId: settings.defaultId
+      defaultId: settings.defaultId,
+      systemOrder: systemWallpaperOrder,
+      userOrder: userWallpaperOrder
     });
     transaction.oncomplete = resolve;
     transaction.onerror = () => reject(transaction.error || new Error("Could not save wallpaper settings."));
     transaction.onabort = () => reject(transaction.error || new Error("Saving wallpaper settings was interrupted."));
+  }));
+}
+
+function saveWallpaperOrder() {
+  return wallpaperDatabase.then((database) => new Promise((resolve, reject) => {
+    const transaction = database.transaction("preferences", "readwrite");
+    transaction.objectStore("preferences").put({
+      key: "wallpaper-settings",
+      activeId: activeWallpaperId,
+      defaultId: defaultWallpaperId,
+      systemOrder: systemWallpaperOrder,
+      userOrder: userWallpaperOrder
+    });
+    transaction.oncomplete = resolve;
+    transaction.onerror = () => reject(transaction.error || new Error("Could not save wallpaper order."));
+    transaction.onabort = () => reject(transaction.error || new Error("Saving wallpaper order was interrupted."));
+  }));
+}
+
+function resetWallpaperSettings(removeUploadedWallpapers) {
+  return wallpaperDatabase.then((database) => new Promise((resolve, reject) => {
+    const transaction = database.transaction(["wallpapers", "preferences"], "readwrite");
+    const wallpapers = transaction.objectStore("wallpapers");
+    const savedRecords = wallpapers.getAll();
+    savedRecords.onsuccess = () => {
+      for (const record of savedRecords.result) {
+        const isSystemWallpaper = systemWallpaperPresets.some((preset) => preset.id === record.id);
+        if (isSystemWallpaper || removeUploadedWallpapers) wallpapers.delete(record.id);
+      }
+      transaction.objectStore("preferences").put({
+        key: "wallpaper-settings",
+        activeId: builtinWallpaperId,
+        defaultId: builtinWallpaperId,
+        systemOrder: systemWallpaperPresets.map((wallpaper) => wallpaper.id),
+        userOrder: removeUploadedWallpapers ? [] : userWallpaperOrder
+      });
+    };
+    transaction.oncomplete = resolve;
+    transaction.onerror = () => reject(transaction.error || new Error("Could not reset wallpaper settings."));
+    transaction.onabort = () => reject(transaction.error || new Error("Resetting wallpaper settings was interrupted."));
   }));
 }
 
@@ -606,7 +752,9 @@ function deleteSavedWallpaper(id, settings) {
     transaction.objectStore("preferences").put({
       key: "wallpaper-settings",
       activeId: settings.activeId,
-      defaultId: settings.defaultId
+      defaultId: settings.defaultId,
+      systemOrder: systemWallpaperOrder,
+      userOrder: userWallpaperOrder
     });
     transaction.oncomplete = resolve;
     transaction.onerror = () => reject(transaction.error || new Error("Could not delete the wallpaper."));
@@ -662,6 +810,23 @@ function saveMusicSettings() {
     transaction.oncomplete = resolve;
     transaction.onerror = () => reject(transaction.error || new Error("Could not save music settings."));
     transaction.onabort = () => reject(transaction.error || new Error("Saving music settings was interrupted."));
+  }));
+}
+
+function resetMusicSettings(removeUploadedMusic) {
+  return wallpaperDatabase.then((database) => new Promise((resolve, reject) => {
+    const transaction = database.transaction(["music-tracks", "preferences"], "readwrite");
+    const tracks = transaction.objectStore("music-tracks");
+    if (removeUploadedMusic) tracks.clear();
+    transaction.objectStore("preferences").put({
+      key: "music-settings",
+      defaultId: builtinRainTrack.id,
+      volume: 0.5,
+      loop: true
+    });
+    transaction.oncomplete = resolve;
+    transaction.onerror = () => reject(transaction.error || new Error("Could not reset music settings."));
+    transaction.onabort = () => reject(transaction.error || new Error("Resetting music settings was interrupted."));
   }));
 }
 
@@ -962,18 +1127,75 @@ function normalizeWallpaper(wallpaper) {
 
 function getWallpaperById(id) {
   if (!id) return builtinWallpaper;
-  if (id === builtinWallpaperId) {
-    return savedWallpapers.find((wallpaper) => wallpaper.id === builtinWallpaperId) || builtinWallpaper;
-  }
   const found = savedWallpapers.find((wallpaper) => wallpaper.id === id);
-  return found || builtinWallpaper;
+  if (found) return found;
+  return systemWallpaperPresets.find((wallpaper) => wallpaper.id === id) || builtinWallpaper;
 }
 
+let contextWallpaperId = null;
+
+function closeWallpaperContextMenu() {
+  wallpaperContextMenu.hidden = true;
+  contextWallpaperId = null;
+}
+
+function openWallpaperContextMenu(event, card) {
+  event.preventDefault();
+  contextWallpaperId = card.dataset.wallpaperId;
+  wallpaperContextMenu.hidden = false;
+  const bounds = wallpaperContextMenu.getBoundingClientRect();
+  wallpaperContextMenu.style.left = `${Math.max(8, Math.min(event.clientX, window.innerWidth - bounds.width - 8))}px`;
+  wallpaperContextMenu.style.top = `${Math.max(8, Math.min(event.clientY, window.innerHeight - bounds.height - 8))}px`;
+  wallpaperContextMenu.querySelector("button")?.focus();
+}
+
+for (const grid of [systemWallpaperGrid, userWallpaperGrid]) {
+  grid.addEventListener("contextmenu", (event) => {
+    const card = event.target.closest(".wallpaper-card");
+    if (card) openWallpaperContextMenu(event, card);
+  });
+}
+
+wallpaperContextMenu.addEventListener("click", async (event) => {
+  const action = event.target.closest("[data-wallpaper-context-action]")?.dataset.wallpaperContextAction;
+  if (!action || !contextWallpaperId) return;
+  const wallpaper = getWallpaperById(contextWallpaperId);
+  const makeDefault = action === "default";
+  const settings = {
+    activeId: wallpaper.id,
+    defaultId: makeDefault ? wallpaper.id : defaultWallpaperId
+  };
+  closeWallpaperContextMenu();
+  try {
+    await saveWallpaper(wallpaper, settings);
+    savedWallpapers = [
+      ...savedWallpapers.filter((item) => item.id !== wallpaper.id),
+      { ...wallpaper }
+    ];
+    activeWallpaperId = wallpaper.id;
+    defaultWallpaperId = settings.defaultId;
+    applyWallpaperToPage(wallpaper);
+    renderWallpaperGrid();
+    showToast(makeDefault ? "Wallpaper set as default" : "Wallpaper applied");
+  } catch (error) {
+    showToast(`Couldn't ${makeDefault ? "set the default wallpaper" : "apply the wallpaper"}: ${error.message}`);
+  }
+});
+
+document.addEventListener("pointerdown", (event) => {
+  if (!wallpaperContextMenu.hidden
+    && !wallpaperContextMenu.contains(event.target)) {
+    closeWallpaperContextMenu();
+  }
+});
+
+wallpaperDialog.addEventListener("scroll", closeWallpaperContextMenu, true);
+
 function wallpaperImageUrl(wallpaper) {
-  if (!wallpaper) return `url("wallpaper.svg")`;
+  if (!wallpaper) return `url("${builtinWallpaper.imageUrl}")`;
   if (wallpaper.type === 'video') return '';
-  if (wallpaper.isBuiltin) return `url("wallpaper.svg")`;
-  if (!wallpaper.dataUrl) return `url("wallpaper.svg")`;
+  if (wallpaper.isBuiltin) return `url("${wallpaper.imageUrl || builtinWallpaper.imageUrl}")`;
+  if (!wallpaper.dataUrl) return `url("${builtinWallpaper.imageUrl}")`;
 
   // Ensure the dataUrl starts with data: and is properly quoted
   const url = wallpaper.dataUrl.startsWith('data:')
@@ -1019,57 +1241,296 @@ function applyWallpaperToPage(wallpaper) {
 }
 
 function renderWallpaperGrid() {
-  if (!wallpaperGrid) return;
-  wallpaperGrid.replaceChildren();
-  const builtin = getWallpaperById(builtinWallpaperId);
-  const wallpapers = [builtin, ...savedWallpapers.filter((wallpaper) => !wallpaper.isBuiltin)
-    .sort((first, second) => second.createdAt - first.createdAt)];
+  if (!systemWallpaperGrid || !userWallpaperGrid) return;
+  systemWallpaperGrid.replaceChildren();
+  userWallpaperGrid.replaceChildren();
 
-  for (const wallpaper of wallpapers) {
-    if (!wallpaper) continue;
-    const card = document.createElement("button");
-    card.className = "wallpaper-card";
-    card.type = "button";
-    card.setAttribute("aria-label", `Preview ${wallpaper.name}`);
+  const orderedSystemWallpapers = orderWallpapers(
+    systemWallpaperPresets.map((preset) =>
+      savedWallpapers.find((wallpaper) => wallpaper.id === preset.id) || preset),
+    systemWallpaperOrder
+  );
+  const uploadedWallpapers = orderWallpapers(
+    savedWallpapers.filter((wallpaper) => !wallpaper.isBuiltin),
+    userWallpaperOrder
+  );
+  orderedSystemWallpapers.forEach((wallpaper) => {
+    systemWallpaperGrid.append(createWallpaperCard(wallpaper, "system"));
+  });
+  uploadedWallpapers.forEach((wallpaper) => {
+    userWallpaperGrid.append(createWallpaperCard(wallpaper, "user"));
+  });
+  if (uploadedWallpapers.length === 0) {
+    const emptyState = document.createElement("p");
+    emptyState.className = "wallpaper-empty";
+    emptyState.textContent = "No wallpapers yet. Upload an image or video to get started.";
+    userWallpaperGrid.append(emptyState);
+  }
+}
 
-    if (wallpaper.type === 'video') {
-      // Create a hidden video element to capture a frame
-      const tempVideo = document.createElement('video');
-      tempVideo.src = wallpaper.dataUrl;
-      tempVideo.muted = true;
-      tempVideo.currentTime = 1; // Capture frame at 1 second
+function orderWallpapers(wallpapers, order) {
+  const byId = new Map(wallpapers.map((wallpaper) => [wallpaper.id, wallpaper]));
+  const sorted = order.map((id) => byId.get(id)).filter(Boolean);
+  const orderedIds = new Set(sorted.map((wallpaper) => wallpaper.id));
+  return [...sorted, ...wallpapers.filter((wallpaper) => !orderedIds.has(wallpaper.id))];
+}
 
-      tempVideo.onloadeddata = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = 132;
-        canvas.height = 122;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(tempVideo, 0, 0, canvas.width, canvas.height);
-        card.style.backgroundImage = `url(${canvas.toDataURL('image/jpeg', 0.7)})`;
-      };
-    } else {
-      setWallpaperImage(card, wallpaper);
+function createWallpaperCard(wallpaper, group) {
+  const card = document.createElement("div");
+  card.className = "wallpaper-card";
+  card.dataset.wallpaperId = wallpaper.id;
+  card.dataset.wallpaperGroup = group;
+  const previewButton = document.createElement("button");
+  previewButton.className = "wallpaper-card-preview";
+  previewButton.type = "button";
+  previewButton.setAttribute("aria-label", `Preview ${wallpaper.name}`);
+  previewButton.addEventListener("click", () => openWallpaperEditor(wallpaper));
+
+  if (wallpaper.type === "video") {
+    const tempVideo = document.createElement("video");
+    tempVideo.src = wallpaper.dataUrl;
+    tempVideo.muted = true;
+    tempVideo.currentTime = 1;
+    tempVideo.onloadeddata = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 132;
+      canvas.height = 122;
+      const context = canvas.getContext("2d");
+      if (context) {
+        context.drawImage(tempVideo, 0, 0, canvas.width, canvas.height);
+        previewButton.style.backgroundImage = `url(${canvas.toDataURL("image/jpeg", 0.7)})`;
+      }
+    };
+  } else {
+    setWallpaperImage(previewButton, wallpaper);
+  }
+
+  const label = document.createElement("span");
+  label.className = "wallpaper-card-label";
+  label.textContent = wallpaper.name;
+  previewButton.append(label);
+
+  if (wallpaper.id === defaultWallpaperId) {
+    const badge = document.createElement("span");
+    badge.className = "wallpaper-card-badge";
+    badge.textContent = "Default";
+    previewButton.append(badge);
+  }
+  card.append(previewButton);
+
+  const reorderButton = document.createElement("button");
+  reorderButton.className = "wallpaper-reorder";
+  reorderButton.type = "button";
+  reorderButton.title = "Hold & drag to reposition or click to move first.";
+  reorderButton.setAttribute("aria-label", `${wallpaper.name}. ${reorderButton.title}`);
+  reorderButton.innerHTML = `
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path transform="translate(-2 0)" d="M8 12V5.5a2 2 0 0 1 4 0V12v-2a2 2 0 0 1 4 0v2-1a2 2 0 0 1 4 0v2-1a2 2 0 0 1 4 0v4a6 6 0 0 1-6 6h-1a6 6 0 0 1-4.2-1.7l-3.6-3.6a2 2 0 0 1 2.8-2.8l1.7 1.7" />
+    </svg>`;
+  reorderButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    if (suppressReorderClick) {
+      suppressReorderClick = false;
+      return;
     }
+    moveWallpaper(wallpaper.id, group, 0);
+  });
+  reorderButton.addEventListener("keydown", (event) => {
+    if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+    event.preventDefault();
+    const currentOrder = getWallpaperOrder(group);
+    const currentIndex = currentOrder.indexOf(wallpaper.id);
+    const nextIndex = Math.max(0, currentIndex + (event.key === "ArrowUp" ? -1 : 2));
+    moveWallpaper(wallpaper.id, group, nextIndex);
+  });
+  reorderButton.addEventListener("pointerdown", (event) => {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    event.preventDefault();
+    draggedWallpaper = {
+      id: wallpaper.id,
+      group,
+      card,
+      grid: card.parentElement,
+      dialog: wallpaperDialog,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      bounds: card.getBoundingClientRect(),
+      moved: false
+    };
+    draggedWallpaper.offsetX = event.clientX - draggedWallpaper.bounds.left;
+    draggedWallpaper.offsetY = event.clientY - draggedWallpaper.bounds.top;
+  });
+  card.append(reorderButton);
+  return card;
+}
 
-    const label = document.createElement("span");
-    label.className = "wallpaper-card-label";
-    label.append(document.createTextNode(wallpaper.name));
+window.addEventListener("pointermove", (event) => {
+  const drag = draggedWallpaper;
+  if (!drag || drag.pointerId !== event.pointerId) return;
+  if (!drag.moved && Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) < 5) return;
 
-    if (wallpaper.id === builtinWallpaperId) {
-      const detail = document.createElement("small");
-      detail.textContent = "Included wallpaper";
-      label.append(detail);
-    }
+  const dialogBounds = drag.dialog.getBoundingClientRect();
+  const dragOriginX = dialogBounds.left + drag.dialog.clientLeft;
+  const dragOriginY = dialogBounds.top + drag.dialog.clientTop;
 
-    card.append(label);
-    if (wallpaper.id === defaultWallpaperId) {
-      const badge = document.createElement("span");
-      badge.className = "wallpaper-card-badge";
-      badge.textContent = "Default";
-      card.append(badge);
-    }
-    card.addEventListener("click", () => openWallpaperEditor(wallpaper));
-    wallpaperGrid.append(card);
+  if (!drag.moved) {
+    drag.moved = true;
+    suppressReorderClick = true;
+    drag.placeholder = document.createElement("div");
+    drag.placeholder.className = "wallpaper-card-placeholder";
+    drag.card.replaceWith(drag.placeholder);
+    drag.card.classList.add("is-dragging");
+    drag.grid.classList.add("is-reordering");
+    Object.assign(drag.card.style, {
+      position: "fixed",
+      left: "0",
+      top: "0",
+      transform: `translate3d(${drag.bounds.left - dragOriginX}px, ${drag.bounds.top - dragOriginY}px, 0)`,
+      width: `${drag.bounds.width}px`,
+      height: `${drag.bounds.height}px`,
+      margin: "0",
+      zIndex: "1000",
+      pointerEvents: "none"
+    });
+    drag.dialog.append(drag.card);
+  }
+
+  drag.card.style.transform = `translate3d(${event.clientX - drag.offsetX - dragOriginX}px, ${event.clientY - drag.offsetY - dragOriginY}px, 0)`;
+  repositionWallpaperPlaceholder(drag, event);
+});
+
+window.addEventListener("pointerup", async (event) => {
+  const drag = draggedWallpaper;
+  if (!drag || drag.pointerId !== event.pointerId) return;
+  draggedWallpaper = null;
+  drag.card.classList.remove("is-dragging");
+  drag.grid.classList.remove("is-reordering");
+  if (!drag.moved) return;
+
+  const destination = drag.placeholder.getBoundingClientRect();
+  const dialogBounds = drag.dialog.getBoundingClientRect();
+  const dragOriginX = dialogBounds.left + drag.dialog.clientLeft;
+  const dragOriginY = dialogBounds.top + drag.dialog.clientTop;
+  const settleAnimation = drag.card.animate([
+    { transform: drag.card.style.transform },
+    { transform: `translate3d(${destination.left - dragOriginX}px, ${destination.top - dragOriginY}px, 0)` }
+  ], { duration: 240, easing: "cubic-bezier(.2,.75,.25,1)" });
+  await settleAnimation.finished;
+  drag.placeholder.replaceWith(drag.card);
+  drag.card.style.cssText = "";
+  const previousOrder = [...getWallpaperOrder(drag.group)];
+  const nextOrder = [...drag.grid.children]
+    .filter((item) => item.classList.contains("wallpaper-card"))
+    .map((item) => item.dataset.wallpaperId);
+  if (drag.group === "system") systemWallpaperOrder = nextOrder;
+  else userWallpaperOrder = nextOrder;
+  window.setTimeout(() => { suppressReorderClick = false; }, 250);
+  try {
+    await saveWallpaperOrder();
+  } catch (error) {
+    if (drag.group === "system") systemWallpaperOrder = previousOrder;
+    else userWallpaperOrder = previousOrder;
+    renderWallpaperGrid();
+    showToast(`Couldn't save wallpaper order: ${error.message}`);
+  }
+});
+
+window.addEventListener("pointercancel", (event) => {
+  if (!draggedWallpaper || draggedWallpaper.pointerId !== event.pointerId) return;
+  const drag = draggedWallpaper;
+  draggedWallpaper = null;
+  drag.grid.classList.remove("is-reordering");
+  suppressReorderClick = false;
+  if (drag.moved) {
+    drag.placeholder.replaceWith(drag.card);
+    drag.card.classList.remove("is-dragging");
+    drag.card.style.cssText = "";
+    renderWallpaperGrid();
+  }
+});
+
+
+
+function repositionWallpaperPlaceholder(drag, event) {
+  const children = [...drag.grid.children];
+  const placeholderIndex = children.indexOf(drag.placeholder);
+  if (placeholderIndex === -1 || children.length < 2) return;
+
+  const gridBounds = drag.grid.getBoundingClientRect();
+  const gridStyle = window.getComputedStyle(drag.grid);
+  const columnCount = Number.parseInt(gridStyle.gridTemplateColumns.split(" ").length, 10);
+  const columnGap = Number.parseFloat(gridStyle.columnGap) || 0;
+  const rowGap = Number.parseFloat(gridStyle.rowGap) || 0;
+  const paddingLeft = Number.parseFloat(gridStyle.paddingLeft) || 0;
+  const paddingRight = Number.parseFloat(gridStyle.paddingRight) || 0;
+  const paddingTop = Number.parseFloat(gridStyle.paddingTop) || 0;
+  const firstCard = children.find((item) => item !== drag.placeholder);
+  if (!firstCard) return;
+  const cellWidth = firstCard.offsetWidth;
+  const cellHeight = firstCard.offsetHeight;
+  const contentLeft = gridBounds.left + drag.grid.clientLeft + paddingLeft;
+  const contentTop = gridBounds.top + drag.grid.clientTop + paddingTop - drag.grid.scrollTop;
+  const localX = event.clientX - contentLeft;
+  const localY = event.clientY - contentTop;
+  const column = Math.max(0, Math.min(columnCount - 1, Math.floor(localX / (cellWidth + columnGap))));
+  const row = Math.max(0, Math.floor(localY / (cellHeight + rowGap)));
+  const targetIndex = Math.min(children.length - 1, row * columnCount + column);
+  if (placeholderIndex === targetIndex) return;
+
+  const movingCards = children.filter((item) => item !== drag.placeholder);
+  const originalPositions = new Map(movingCards.map((item) => [item, item.getBoundingClientRect()]));
+  movingCards.forEach((item) => {
+    item.getAnimations().forEach((animation) => animation.cancel());
+  });
+
+  if (targetIndex < placeholderIndex) {
+    drag.grid.insertBefore(drag.placeholder, children[targetIndex]);
+  } else {
+    const targetCard = children[targetIndex];
+    const targetNextCard = targetCard.nextElementSibling;
+    drag.grid.insertBefore(targetCard, drag.placeholder);
+    drag.grid.insertBefore(drag.placeholder, targetNextCard);
+  }
+
+  movingCards.forEach((item) => {
+    const original = originalPositions.get(item);
+    const current = item.getBoundingClientRect();
+    const offsetX = original.left - current.left;
+    const offsetY = original.top - current.top;
+    if (!offsetX && !offsetY) return;
+    item.animate(
+      [
+        { transform: `translate3d(${offsetX}px, ${offsetY}px, 0)` },
+        { transform: "translate3d(0, 0, 0)" }
+      ],
+      { duration: wallpaperReorderAnimationDuration, easing: "cubic-bezier(.2,.75,.25,1)" }
+    );
+  });
+}
+
+function getWallpaperOrder(group) {
+  return group === "system" ? systemWallpaperOrder : userWallpaperOrder;
+}
+
+async function moveWallpaper(id, group, targetIndex) {
+  const previousOrder = [...getWallpaperOrder(group)];
+  const order = [...previousOrder];
+  const currentIndex = order.indexOf(id);
+  if (currentIndex === -1) return;
+  order.splice(currentIndex, 1);
+  const adjustedIndex = currentIndex < targetIndex ? targetIndex - 1 : targetIndex;
+  order.splice(Math.max(0, Math.min(adjustedIndex, order.length)), 0, id);
+  if (group === "system") systemWallpaperOrder = order;
+  else userWallpaperOrder = order;
+
+  try {
+    await saveWallpaperOrder();
+    renderWallpaperGrid();
+  } catch (error) {
+    if (group === "system") systemWallpaperOrder = previousOrder;
+    else userWallpaperOrder = previousOrder;
+    showToast(`Couldn't save wallpaper order: ${error.message}`);
   }
 }
 
@@ -1149,6 +1610,7 @@ function showWallpaperLibrary() {
   quotesSettingsTab.classList.remove("is-active");
   quotesSettingsTab.removeAttribute("aria-current");
   wallpaperDialog.style.display = 'grid';
+  animateSettingsPanel(wallpaperLibrary);
 }
 
 function showMusicLibrary() {
@@ -1165,6 +1627,7 @@ function showMusicLibrary() {
   quotesSettingsTab.classList.remove("is-active");
   quotesSettingsTab.removeAttribute("aria-current");
   wallpaperDialog.style.display = "grid";
+  animateSettingsPanel(musicLibrary);
 }
 
 function showQuotesLibrary() {
@@ -1181,17 +1644,42 @@ function showQuotesLibrary() {
   quotesSettingsTab.classList.add("is-active");
   quotesSettingsTab.setAttribute("aria-current", "page");
   wallpaperDialog.style.display = "grid";
+  animateSettingsPanel(quotesLibrary);
+}
+
+function animateSettingsPanel(panel) {
+  panel.classList.remove("settings-panel-enter");
+  void panel.offsetWidth;
+  panel.classList.add("settings-panel-enter");
 }
 
 async function initializeWallpaperSettings() {
   const state = await readWallpaperLibrary();
-  savedWallpapers = state.wallpapers.map((wallpaper) => wallpaper.id === builtinWallpaperId
-    ? normalizeWallpaper({ ...builtinWallpaper, ...wallpaper, isBuiltin: true })
-    : normalizeWallpaper({ ...wallpaper, isBuiltin: false }));
+  savedWallpapers = state.wallpapers.map((wallpaper) => {
+    const preset = systemWallpaperPresets.find((item) => item.id === wallpaper.id);
+    return preset
+      ? normalizeWallpaper({ ...preset, ...wallpaper, imageUrl: preset.imageUrl, isBuiltin: true })
+      : normalizeWallpaper({ ...wallpaper, isBuiltin: false });
+  });
 
   const settings = state.settings || {};
-  defaultWallpaperId = getWallpaperById(settings.defaultId) ? settings.defaultId : builtinWallpaperId;
-  const activeWallpaper = getWallpaperById(settings.activeId) || getWallpaperById(defaultWallpaperId) || builtinWallpaper;
+  const systemIds = new Set(systemWallpaperPresets.map((wallpaper) => wallpaper.id));
+  const userIds = new Set(savedWallpapers.filter((wallpaper) => !wallpaper.isBuiltin).map((wallpaper) => wallpaper.id));
+  systemWallpaperOrder = [
+    ...(Array.isArray(settings.systemOrder) ? settings.systemOrder.filter((id) => systemIds.has(id)) : []),
+    ...systemWallpaperPresets.map((wallpaper) => wallpaper.id)
+  ].filter((id, index, order) => order.indexOf(id) === index);
+  userWallpaperOrder = [
+    ...(Array.isArray(settings.userOrder) ? settings.userOrder.filter((id) => userIds.has(id)) : []),
+    ...userIds
+  ].filter((id, index, order) => order.indexOf(id) === index);
+  defaultWallpaperId = systemIds.has(settings.defaultId) || userIds.has(settings.defaultId)
+    ? settings.defaultId
+    : builtinWallpaperId;
+  const activeId = systemIds.has(settings.activeId) || userIds.has(settings.activeId)
+    ? settings.activeId
+    : defaultWallpaperId;
+  const activeWallpaper = getWallpaperById(activeId);
   activeWallpaperId = activeWallpaper.id;
   applyWallpaperToPage(activeWallpaper);
   renderWallpaperGrid();
@@ -1249,6 +1737,130 @@ musicSettingsTab.addEventListener("click", async () => {
 
 quotesSettingsTab.addEventListener("click", () => {
   showQuotesLibrary();
+});
+
+function requestSettingsReset(settingName, resetAction, deleteUploadsLabel) {
+  pendingSettingsReset = resetAction;
+  settingsResetTrigger = document.activeElement;
+  settingsResetCopy.textContent = `This will reset everything in ${settingName} settings. Do you want to continue?`;
+  settingsResetDeleteOption.hidden = !deleteUploadsLabel;
+  settingsResetDeleteLabel.textContent = deleteUploadsLabel || "";
+  settingsResetDeleteUploads.checked = false;
+  settingsResetBackdrop.hidden = false;
+  settingsResetConfirm.hidden = false;
+  settingsResetNoButton.focus();
+}
+
+function cancelSettingsReset() {
+  pendingSettingsReset = null;
+  settingsResetConfirm.hidden = true;
+  settingsResetBackdrop.hidden = true;
+  settingsResetDeleteOption.hidden = true;
+  settingsResetDeleteUploads.checked = false;
+  if (settingsResetTrigger instanceof HTMLElement) settingsResetTrigger.focus();
+  settingsResetTrigger = null;
+}
+
+settingsResetNoButton.addEventListener("click", cancelSettingsReset);
+settingsResetBackdrop.addEventListener("click", cancelSettingsReset);
+settingsResetYesButton.addEventListener("click", async () => {
+  const resetAction = pendingSettingsReset;
+  const deleteUploads = !settingsResetDeleteOption.hidden && settingsResetDeleteUploads.checked;
+  cancelSettingsReset();
+  if (resetAction) await resetAction(deleteUploads);
+});
+wallpaperDialog.addEventListener("cancel", (event) => {
+  if (settingsResetConfirm.hidden) return;
+  event.preventDefault();
+  cancelSettingsReset();
+});
+wallpaperDialog.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !wallpaperContextMenu.hidden) {
+    event.preventDefault();
+    wallpaperContextMenu.hidden = true;
+    contextWallpaperId = null;
+    return;
+  }
+  if (settingsResetConfirm.hidden || event.key !== "Tab") return;
+  const focusableElements = [
+    settingsResetNoButton,
+    ...(settingsResetDeleteOption.hidden ? [] : [settingsResetDeleteUploads]),
+    settingsResetYesButton
+  ];
+  const currentIndex = focusableElements.indexOf(document.activeElement);
+  if (event.shiftKey && currentIndex === 0) {
+    event.preventDefault();
+    focusableElements[focusableElements.length - 1].focus();
+  } else if (!event.shiftKey && currentIndex === focusableElements.length - 1) {
+    event.preventDefault();
+    focusableElements[0].focus();
+  }
+});
+
+document.querySelector("#wallpaper-reset-settings").addEventListener("click", () => {
+  requestSettingsReset("Wallpaper", async (deleteUploads) => {
+    try {
+      await resetWallpaperSettings(deleteUploads);
+      savedWallpapers = savedWallpapers.filter((wallpaper) => !wallpaper.isBuiltin
+        && !deleteUploads);
+      userWallpaperOrder = deleteUploads ? [] : userWallpaperOrder;
+      systemWallpaperOrder = systemWallpaperPresets.map((wallpaper) => wallpaper.id);
+      defaultWallpaperId = builtinWallpaperId;
+      activeWallpaperId = builtinWallpaperId;
+      applyWallpaperToPage(builtinWallpaper);
+      renderWallpaperGrid();
+      showToast("Wallpaper settings reset");
+    } catch (error) {
+      showToast(`Couldn't reset wallpaper settings: ${error.message}`);
+    }
+  }, "Also delete all uploaded wallpapers");
+});
+
+document.querySelector("#music-reset-settings").addEventListener("click", () => {
+  requestSettingsReset("Music", async (deleteUploads) => {
+    try {
+      await resetMusicSettings(deleteUploads);
+      if (deleteUploads) {
+        if (activeMusicTrackId) {
+          musicPlayer.pause();
+          musicPlayer.removeAttribute("src");
+          musicPlayer.load();
+          activeMusicTrackId = null;
+          updateSoundToggle(false, "Toggle ambient sound");
+        }
+        for (const objectUrl of musicTrackUrls.values()) URL.revokeObjectURL(objectUrl);
+        musicTrackUrls.clear();
+      }
+      if (deleteUploads) savedMusicTracks = [];
+      defaultMusicId = builtinRainTrack.id;
+      musicVolumeLevel = 0.5;
+      musicLoop.checked = true;
+      musicVolume.value = "50";
+      musicVolumeValue.value = "50%";
+      musicVolumeValue.textContent = "50%";
+      musicPlayer.volume = musicVolumeLevel;
+      musicPlayer.loop = true;
+      if (noiseGain) noiseGain.gain.value = 0.018 * musicVolumeLevel;
+      renderMusicTracks();
+      showToast("Music settings reset");
+    } catch (error) {
+      showToast(`Couldn't reset music settings: ${error.message}`);
+    }
+  }, "Also delete all uploaded music");
+});
+
+document.querySelector("#quotes-reset-settings").addEventListener("click", () => {
+  requestSettingsReset("Quotes", () => {
+    const previous = { ...currentQuotes };
+    currentQuotes = { ...quoteDefaults };
+    renderQuotes();
+    if (!saveQuotes()) {
+      currentQuotes = previous;
+      renderQuotes();
+      return;
+    }
+    showToast("Quotes reset");
+  });
 });
 
 // Absolute override for the cancel button in the editor
@@ -1451,12 +2063,12 @@ function readMediaFile(file) {
 }
 
 async function handleWallpaperUpload(file, sourceInput) {
-  if (!file) return;
+  if (!file) return false;
   const mediaType = determineMediaType(file);
   if (mediaType === "unknown") {
     wallpaperNotice.textContent = "Choose an image or video file to upload";
     wallpaperNotice.hidden = false;
-    return;
+    return false;
   }
 
   try {
@@ -1476,15 +2088,17 @@ async function handleWallpaperUpload(file, sourceInput) {
     await saveUploadedWallpaper(record);
     savedWallpapers = [...savedWallpapers, record];
     renderWallpaperGrid();
-    sourceInput.value = "";
+    if (sourceInput) sourceInput.value = "";
     openWallpaperEditor(record);
 
     wallpaperNotice.textContent = "Wallpaper added to your library";
     wallpaperNotice.hidden = false;
+    return true;
   } catch (error) {
-    sourceInput.value = "";
+    if (sourceInput) sourceInput.value = "";
     wallpaperNotice.textContent = `Couldn't upload wallpaper: ${error.message}`;
     wallpaperNotice.hidden = false;
+    return false;
   }
 }
 
@@ -1497,6 +2111,71 @@ wallpaperImageUpload.addEventListener("change", () => {
 wallpaperVideoUpload.addEventListener("change", () => {
   if (wallpaperVideoUpload.files && wallpaperVideoUpload.files[0]) {
     handleWallpaperUpload(wallpaperVideoUpload.files[0], wallpaperVideoUpload);
+  }
+});
+
+wallpaperUrlForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const rawUrl = wallpaperUrlInput.value.trim();
+  let sourceUrl;
+  try {
+    sourceUrl = new URL(rawUrl);
+    if (!["http:", "https:"].includes(sourceUrl.protocol)) {
+      throw new Error("Only HTTP and HTTPS media URLs are supported.");
+    }
+  } catch (error) {
+    wallpaperNotice.textContent = `Couldn't fetch wallpaper: ${error.message || "Enter a valid HTTP or HTTPS URL."}`;
+    wallpaperNotice.hidden = false;
+    return;
+  }
+
+  wallpaperUrlFetchButton.disabled = true;
+  wallpaperNotice.textContent = "Fetching media from URL…";
+  wallpaperNotice.hidden = false;
+  try {
+    if (globalThis.chrome?.permissions?.request) {
+      const permissionOrigin = `${sourceUrl.protocol}//${sourceUrl.hostname}/*`;
+      const granted = await chrome.permissions.request({ origins: [permissionOrigin] });
+      if (!granted) throw new Error("Site access was not granted. Allow access to fetch from this domain.");
+    }
+
+    const response = await fetch(sourceUrl.href);
+    if (!response.ok) throw new Error(`The server responded with status ${response.status}.`);
+    if (response.type === "opaque") {
+      throw new Error("The server did not allow access to this media. Use a direct URL that permits cross-origin fetching.");
+    }
+    const blob = await response.blob();
+    if (blob.size === 0) throw new Error("The URL returned an empty file.");
+    const contentType = (response.headers.get("content-type") || blob.type).split(";")[0].trim().toLowerCase();
+    let filename = sourceUrl.pathname.split("/").pop() || "";
+    try {
+      filename = decodeURIComponent(filename).replace(/[\\/]/g, "_");
+    } catch {
+      throw new Error("The URL contains an invalid encoded filename.");
+    }
+    if (!filename || !filename.includes(".")) {
+      const mimeSubtype = contentType.split("/")[1] || "bin";
+      const extension = mimeSubtype.replace("jpeg", "jpg");
+      filename = `wallpaper-${Date.now()}.${extension}`;
+    }
+    const hasMediaType = contentType.startsWith("image/") || contentType.startsWith("video/");
+    const canInferFromFilename = !contentType || contentType === "application/octet-stream";
+    if (!hasMediaType && !canInferFromFilename) {
+      throw new Error("The URL must point directly to an image or video file.");
+    }
+    const mediaFile = new File([blob], filename, { type: contentType });
+    if (determineMediaType(mediaFile) === "unknown") {
+      throw new Error("This image or video format is not supported.");
+    }
+    if (await handleWallpaperUpload(mediaFile, null)) wallpaperUrlInput.value = "";
+  } catch (error) {
+    const detail = error instanceof TypeError
+      ? "The URL is unreachable or the server blocked cross-origin access (CORS). Try a direct media URL from a site that permits fetching."
+      : error.message;
+    wallpaperNotice.textContent = `Couldn't fetch media: ${detail}`;
+    wallpaperNotice.hidden = false;
+  } finally {
+    wallpaperUrlFetchButton.disabled = false;
   }
 });
 

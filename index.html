@@ -22,7 +22,7 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4.75A1.75 1.75 0 0 1 7.75 3h8.5A1.75 1.75 0 0 1 18 4.75V21l-6-3.8L6 21V4.75Z"/></svg>
       </button>
       <button class="settings-toggle glass-icon" id="settings-toggle" type="button" aria-label="Settings" title="Settings">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"/><path d="m19.4 13.5 1.1.9-1.5 2.6-1.4-.5a7.8 7.8 0 0 1-1.4.8l-.2 1.5h-3l-.3-1.5a7.8 7.8 0 0 1-1.4-.8l-1.4.5-1.5-2.6 1.1-.9a6.8 6.8 0 0 1 0-1.6l-1.1-.9 1.5-2.6 1.4.5a7.8 7.8 0 0 1 1.4-.8l.3-1.5h3l.2 1.5a7.8 7.8 0 0 1 1.4.8l1.4-.5 1.5 2.6-1.1.9a6.8 6.8 0 0 1 0 1.6Z"/></svg>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path transform="translate(0 1)" d="M10 2.75h4l.45 2.3a7.5 7.5 0 0 1 1.55.9l2.2-.8 2 3.45-1.75 1.5a7.4 7.4 0 0 1 0 1.8l1.75 1.5-2 3.45-2.2-.8a7.5 7.5 0 0 1-1.55.9L14 19.25h-4l-.45-2.3a7.5 7.5 0 0 1-1.55-.9l-2.2.8-2-3.45 1.75-1.5a7.4 7.4 0 0 1 0-1.8L3.8 8.6l2-3.45 2.2.8a7.5 7.5 0 0 1 1.55-.9L10 2.75Z"/><circle cx="12" cy="12" r="2.4"/></svg>
       </button>
 
       <section class="center-panel" aria-label="Clock and search">
@@ -30,7 +30,7 @@
         <div class="date" id="date">Loading date…</div>
 
         <div class="weather" aria-label="A little weather-inspired note">
-          <span class="weather-icon" aria-hidden="true">☀</span>
+          <span class="weather-icon" id="weather-icon" aria-hidden="true">☀</span>
           <span class="weather-copy">
             <strong id="quote-title">Make today yours</strong>
             <span id="quote-subtitle">A little space to think, wherever you are</span>
@@ -138,20 +138,42 @@
             </div>
             <button class="dialog-close" id="wallpaper-close" type="button" aria-label="Close settings">×</button>
           </header>
-          <section class="wallpaper-library" id="wallpaper-library" aria-labelledby="wallpaper-section-title">
-            <div class="wallpaper-section-header">
-              <div>
-                <h3 id="wallpaper-section-title">Wallpaper</h3>
-                <p>Choose a scene or add one from your device.</p>
-              </div>
-              <div class="upload-actions">
-                <label class="upload-button" for="wallpaper-upload-image">＋ Upload image</label>
-                <input class="visually-hidden" id="wallpaper-upload-image" type="file" accept="image/*">
-                <label class="upload-button" for="wallpaper-upload-video">＋ Upload video</label>
-                <input class="visually-hidden" id="wallpaper-upload-video" type="file" accept="video/*">
-              </div>
+          <section class="wallpaper-library" id="wallpaper-library" aria-label="Wallpaper library">
+            <div class="settings-section-actions">
+              <button class="settings-reset-button" id="wallpaper-reset-settings" type="button" title="Reset wallpaper selection and order" aria-label="Reset wallpaper settings">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.8-4L3 10"/><path d="M3 5v5h5M4 13a8 8 0 0 0 14.8 4L21 14"/><path d="M21 19v-5h-5"/></svg>
+                <span>Reset</span>
+              </button>
             </div>
-            <div class="wallpaper-grid" id="wallpaper-grid" aria-label="Available wallpapers"></div>
+            <details class="wallpaper-group" open>
+              <summary class="wallpaper-group-title">
+                <span>System wallpapers</span>
+                <span class="wallpaper-group-hint">Included with Stillroom</span>
+              </summary>
+              <div class="wallpaper-grid wallpaper-scroll-grid" id="system-wallpaper-grid" aria-label="System wallpapers"></div>
+            </details>
+            <details class="wallpaper-group" open>
+              <summary class="wallpaper-group-title">
+                <span>Your wallpapers</span>
+                <span class="wallpaper-group-hint">Your uploaded images and videos</span>
+              </summary>
+              <div class="wallpaper-section-header wallpaper-upload-header">
+                <p>Choose a scene or add one from your device.</p>
+                <div class="upload-actions">
+                  <label class="upload-button" for="wallpaper-upload-image">＋ Upload image</label>
+                  <input class="visually-hidden" id="wallpaper-upload-image" type="file" accept="image/*">
+                  <label class="upload-button" for="wallpaper-upload-video">＋ Upload video</label>
+                  <input class="visually-hidden" id="wallpaper-upload-video" type="file" accept="video/*">
+                </div>
+              </div>
+              <form class="wallpaper-url-fetch" id="wallpaper-url-fetch">
+                <span class="wallpaper-url-icon" aria-hidden="true">▶</span>
+                <label class="visually-hidden" for="wallpaper-url">Image or video URL</label>
+                <input id="wallpaper-url" name="url" type="url" placeholder="Paste an image or video URL" autocomplete="url" required>
+                <button class="upload-button" id="wallpaper-url-fetch-button" type="submit">Fetch</button>
+              </form>
+              <div class="wallpaper-grid wallpaper-scroll-grid" id="user-wallpaper-grid" aria-label="Your wallpapers"></div>
+            </details>
           </section>
 
           <section class="music-library" id="music-library" aria-labelledby="music-section-title" hidden>
@@ -160,9 +182,15 @@
                 <h3 id="music-section-title">Your music</h3>
                 <p>Upload tracks, preview them, and choose what plays from the sound button.</p>
               </div>
-              <div class="upload-actions">
+              <div class="settings-section-actions">
+                <button class="settings-reset-button" id="music-reset-settings" type="button" title="Reset music settings" aria-label="Reset music settings">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.8-4L3 10"/><path d="M3 5v5h5M4 13a8 8 0 0 0 14.8 4L21 14"/><path d="M21 19v-5h-5"/></svg>
+                  <span>Reset</span>
+                </button>
+                <div class="upload-actions">
                 <label class="upload-button" for="music-upload">＋ Upload music</label>
                 <input class="visually-hidden" id="music-upload" type="file" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.oga,.flac,.opus">
+                </div>
               </div>
             </div>
             <div class="music-controls">
@@ -185,6 +213,10 @@
                 <h3 id="quotes-section-title">Your quotes</h3>
                 <p>Personalize each message on your new-tab page. Reset any one to its original text.</p>
               </div>
+              <button class="settings-reset-button" id="quotes-reset-settings" type="button" title="Reset all quotes" aria-label="Reset all quotes">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.8-4L3 10"/><path d="M3 5v5h5M4 13a8 8 0 0 0 14.8 4L21 14"/><path d="M21 19v-5h-5"/></svg>
+                <span>Reset</span>
+              </button>
             </div>
             <div class="quote-setting-list">
               <div class="quote-setting">
@@ -252,6 +284,23 @@
             <button class="wallpaper-action secondary" id="wallpaper-delete-cancel" type="button">Cancel</button>
             <button class="wallpaper-action danger" id="wallpaper-delete-confirm-button" type="button">Delete wallpaper</button>
           </div>
+        </div>
+        <div class="reset-confirm-backdrop" id="settings-reset-backdrop" hidden></div>
+        <div class="delete-confirm reset-confirm" id="settings-reset-confirm" role="alertdialog" aria-labelledby="settings-reset-title" aria-describedby="settings-reset-copy" aria-modal="true" hidden>
+          <h3 id="settings-reset-title">Reset settings?</h3>
+          <p id="settings-reset-copy">This will reset everything in these settings. Do you want to continue?</p>
+          <label class="reset-delete-option" id="settings-reset-delete-option" for="settings-reset-delete-uploads" hidden>
+            <input id="settings-reset-delete-uploads" type="checkbox">
+            <span id="settings-reset-delete-label">Also delete uploaded files</span>
+          </label>
+          <div class="delete-confirm-actions">
+            <button class="wallpaper-action secondary" id="settings-reset-no" type="button">No</button>
+            <button class="wallpaper-action danger" id="settings-reset-yes" type="button">Yes, reset</button>
+          </div>
+        </div>
+        <div class="wallpaper-context-menu" id="wallpaper-context-menu" role="menu" aria-label="Wallpaper actions" hidden>
+          <button type="button" role="menuitem" data-wallpaper-context-action="apply">Apply</button>
+          <button type="button" role="menuitem" data-wallpaper-context-action="default">Set as default</button>
         </div>
         <p class="wallpaper-notice" id="wallpaper-notice" role="status" aria-live="polite" hidden></p>
       </dialog>
