@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#152b31">
     <title>Stillroom</title>
+    <link rel="preconnect" href="https://suggestqueries.google.com" crossorigin>
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
@@ -167,10 +168,10 @@
                 </div>
               </div>
               <form class="wallpaper-url-fetch" id="wallpaper-url-fetch">
-                <span class="wallpaper-url-icon" aria-hidden="true">▶</span>
                 <label class="visually-hidden" for="wallpaper-url">Image or video URL</label>
                 <input id="wallpaper-url" name="url" type="url" placeholder="Paste an image or video URL" autocomplete="url" required>
                 <button class="upload-button" id="wallpaper-url-fetch-button" type="submit">Fetch</button>
+                <button class="upload-button" id="wallpaper-paste-image" type="button">Paste image</button>
               </form>
               <div class="wallpaper-grid wallpaper-scroll-grid" id="user-wallpaper-grid" aria-label="Your wallpapers"></div>
             </details>
@@ -234,6 +235,15 @@
                 <input id="quote-subtitle-input" type="text" maxlength="160">
                 <button class="wallpaper-action secondary quote-reset" type="button" data-quote-reset="subtitle">Reset</button>
               </div>
+            </div>
+            <div class="location-weather-setting">
+              <div>
+                <strong>Local weather icon</strong>
+                <p id="location-weather-status" role="status" aria-live="polite">Location weather is off.</p>
+              </div>
+              <label class="toggle-switch" for="location-weather-toggle">
+                <input id="location-weather-toggle" type="checkbox" role="switch" aria-label="Use location for weather">
+              </label>
             </div>
           </section>
 
@@ -301,6 +311,28 @@
         <div class="wallpaper-context-menu" id="wallpaper-context-menu" role="menu" aria-label="Wallpaper actions" hidden>
           <button type="button" role="menuitem" data-wallpaper-context-action="apply">Apply</button>
           <button type="button" role="menuitem" data-wallpaper-context-action="default">Set as default</button>
+        </div>
+        <div class="media-fetch-help" id="media-fetch-help" hidden>
+          <section class="media-fetch-help-card" role="alertdialog" aria-modal="true" aria-labelledby="media-fetch-help-title" aria-describedby="media-fetch-help-message" tabindex="-1">
+            <header class="media-fetch-help-header">
+              <h3 id="media-fetch-help-title">Couldn't fetch this media</h3>
+              <button class="dialog-close" id="media-fetch-help-close" type="button" aria-label="Close fetch help">×</button>
+            </header>
+            <p id="media-fetch-help-message"></p>
+            <label class="media-fetch-help-label" for="media-fetch-page-url">Page URL</label>
+            <div class="media-fetch-help-address">
+              <input id="media-fetch-page-url" type="url" readonly>
+              <button class="wallpaper-action secondary" id="media-fetch-copy-page" type="button">Copy</button>
+            </div>
+            <div id="media-fetch-media-address-section" hidden>
+              <label class="media-fetch-help-label" for="media-fetch-media-url">Media address found on the page</label>
+              <div class="media-fetch-help-address">
+                <input id="media-fetch-media-url" type="url" readonly>
+                <button class="wallpaper-action secondary" id="media-fetch-copy-media" type="button">Copy</button>
+              </div>
+            </div>
+            <p class="media-fetch-help-tip">Some sites hide video files behind sign-in, scripts, or protected streams. If no media address is shown, copy the image itself and use Paste image, or download the video and use Upload video.</p>
+          </section>
         </div>
         <p class="wallpaper-notice" id="wallpaper-notice" role="status" aria-live="polite" hidden></p>
       </dialog>

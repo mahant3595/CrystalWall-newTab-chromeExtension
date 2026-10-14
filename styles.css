@@ -152,6 +152,7 @@ button { color: inherit; }
 
 .search-wrapper {
   position: relative;
+  z-index: 2;
   width: min(100%, 610px);
   margin-top: 51px;
 }
@@ -506,24 +507,32 @@ button { color: inherit; }
 .wallpaper-url-fetch {
   display: flex;
   align-items: center;
-  gap: 9px;
-  margin: -6px 0 14px;
+  gap: 8px;
+  margin: 0 0 14px;
 }
-.wallpaper-url-icon { color: rgba(255, 255, 255, .72); font-size: 13px; }
 .wallpaper-url-fetch input {
-  width: 100%;
+  flex: 1 1 auto;
   min-width: 0;
-  min-height: 40px;
-  padding: 0 12px;
+  height: 38px;
+  padding: 0 10px;
   border: 1px solid rgba(255, 255, 255, .2);
-  border-radius: 9px;
+  border-radius: 8px;
   color: white;
   background: rgba(255, 255, 255, .07);
   font: inherit;
-  font-size: 13px;
+  font-size: 12px;
 }
 .wallpaper-url-fetch input:focus { outline: 2px solid rgba(136, 216, 200, .75); outline-offset: 1px; }
 .wallpaper-url-fetch input::placeholder { color: rgba(255, 255, 255, .48); }
+.wallpaper-url-fetch .upload-button {
+  min-height: 38px;
+  justify-content: center;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+#wallpaper-url-fetch-button { min-width: 68px; }
+#wallpaper-paste-image { min-width: 96px; }
 .wallpaper-group { margin-top: 18px; }
 .wallpaper-group:first-child { margin-top: 22px; }
 .wallpaper-group-title {
@@ -671,6 +680,35 @@ button { color: inherit; }
 }
 .quote-setting input:focus { outline: 2px solid rgba(136, 216, 200, .75); outline-offset: 2px; }
 .quote-setting .quote-reset { min-height: 40px; }
+.location-weather-setting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 18px;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, .13);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, .05);
+}
+.location-weather-setting strong { display: block; color: rgba(255, 255, 255, .9); font-size: 13px; font-weight: 600; }
+.location-weather-setting p { margin: 5px 0 0; color: rgba(255, 255, 255, .58); font-size: 11px; line-height: 1.4; }
+.toggle-switch { display: inline-flex; width: 42px; height: 24px; flex: 0 0 42px; cursor: pointer; }
+.toggle-switch input {
+  width: 42px;
+  height: 24px;
+  margin: 0;
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, .26);
+  border-radius: 20px;
+  background: rgba(0, 0, 0, .24);
+  cursor: pointer;
+  transition: background .18s ease, border-color .18s ease;
+}
+.toggle-switch input::before { display: block; width: 16px; height: 16px; margin: 3px; border-radius: 50%; background: rgba(255, 255, 255, .82); content: ""; transition: transform .18s ease; }
+.toggle-switch input:checked { border-color: rgba(168, 225, 213, .7); background: rgba(125, 203, 190, .42); }
+.toggle-switch input:checked::before { transform: translateX(18px); background: #d6fff5; }
+.toggle-switch input:focus-visible { outline: 2px solid #a8e1d5; outline-offset: 3px; }
 .wallpaper-editor {
   position: absolute;
   z-index: 2;
@@ -812,6 +850,46 @@ button { color: inherit; }
   cursor: pointer;
 }
 .wallpaper-context-menu button:hover, .wallpaper-context-menu button:focus-visible { outline: none; background: rgba(255, 255, 255, .12); }
+.media-fetch-help {
+  position: absolute;
+  z-index: 8;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 22px;
+  background: rgba(5, 13, 17, .74);
+  backdrop-filter: blur(5px);
+}
+.media-fetch-help[hidden] { display: none; }
+.media-fetch-help-card {
+  width: min(520px, 100%);
+  max-height: 100%;
+  padding: 20px;
+  overflow: auto;
+  border: 1px solid rgba(255, 255, 255, .2);
+  border-radius: 14px;
+  color: white;
+  background: #1b3036;
+  box-shadow: 0 20px 65px rgba(0, 0, 0, .55);
+}
+.media-fetch-help-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.media-fetch-help-header h3 { margin: 0; font-size: 18px; }
+.media-fetch-help-card > p { color: rgba(255, 255, 255, .76); font-size: 13px; line-height: 1.5; }
+.media-fetch-help-label { display: block; margin: 14px 0 6px; color: rgba(255, 255, 255, .86); font-size: 12px; font-weight: 600; }
+.media-fetch-help-address { display: flex; gap: 8px; }
+.media-fetch-help-address input {
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, .18);
+  border-radius: 8px;
+  color: white;
+  background: rgba(255, 255, 255, .07);
+  font: inherit;
+  font-size: 12px;
+}
+.media-fetch-help-tip { margin-bottom: 0; }
 .wallpaper-notice { position: absolute; z-index: 4; right: 14px; bottom: 10px; left: 162px; margin: 0; color: #ffd1a6; font-size: 13px; }
 .wallpaper-notice[hidden] { display: none; }
 @keyframes settings-drawer-arrive { from { opacity: 0; transform: translateX(22px); } to { opacity: 1; transform: translateX(0); } }
@@ -856,8 +934,12 @@ button { color: inherit; }
   .settings-content-header h2 { font-size: 21px; }
   .wallpaper-section-header { align-items: flex-start; flex-direction: column; }
   .wallpaper-upload-header { flex-direction: column; }
+  .wallpaper-upload-header .upload-actions { justify-content: flex-start; }
   .wallpaper-url-fetch { gap: 6px; }
-  .wallpaper-url-fetch input { min-height: 36px; padding: 0 8px; font-size: 11px; }
+  .wallpaper-url-fetch input { height: 35px; padding: 0 8px; font-size: 11px; }
+  .wallpaper-url-fetch .upload-button { min-height: 35px; padding: 0 8px; font-size: 11px; }
+  #wallpaper-url-fetch-button { min-width: 56px; }
+  #wallpaper-paste-image { min-width: 82px; }
   .upload-button { min-height: 36px; padding: 0 10px; font-size: 12px; }
   .wallpaper-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .wallpaper-scroll-grid { max-height: 408px; }
@@ -869,6 +951,9 @@ button { color: inherit; }
   .wallpaper-editor-actions { flex-wrap: wrap; gap: 7px; }
   .wallpaper-action { min-height: 36px; padding: 0 10px; font-size: 11px; }
   .wallpaper-notice { right: 10px; bottom: 8px; left: 102px; font-size: 11px; }
+  .media-fetch-help { padding: 10px; }
+  .media-fetch-help-card { padding: 15px; }
+  .media-fetch-help-address .wallpaper-action { min-height: 36px; padding: 0 10px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

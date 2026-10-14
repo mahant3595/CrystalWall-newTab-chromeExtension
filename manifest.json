@@ -7,11 +7,14 @@
     "newtab": "index.html"
   },
   "host_permissions": [
+    "http://*/*",
+    "https://*/*",
     "https://suggestqueries.google.com/*",
     "https://api.open-meteo.com/*"
   ],
-  "optional_host_permissions": [
-    "http://*/*",
-    "https://*/*"
+  "permissions": [
+    "activeTab",
+    "clipboardRead",
+    "clipboardWrite"
   ]
 }

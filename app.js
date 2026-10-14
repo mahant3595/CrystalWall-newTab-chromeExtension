@@ -22,6 +22,7 @@ const wallpaperPreviewInner = document.querySelector("#wallpaper-preview-inner")
 const wallpaperImageUpload = document.querySelector("#wallpaper-upload-image");
 const wallpaperVideoUpload = document.querySelector("#wallpaper-upload-video");
 const wallpaperNotice = document.querySelector("#wallpaper-notice");
+let wallpaperNoticeTimeout = null;
 const wallpaperZoom = document.querySelector("#wallpaper-zoom");
 const wallpaperBrightness = document.querySelector("#wallpaper-brightness");
 const wallpaperZoomValue = document.querySelector("#wallpaper-zoom-value");
@@ -43,6 +44,13 @@ const wallpaperContextMenu = document.querySelector("#wallpaper-context-menu");
 const wallpaperUrlForm = document.querySelector("#wallpaper-url-fetch");
 const wallpaperUrlInput = document.querySelector("#wallpaper-url");
 const wallpaperUrlFetchButton = document.querySelector("#wallpaper-url-fetch-button");
+const wallpaperPasteImageButton = document.querySelector("#wallpaper-paste-image");
+const mediaFetchHelp = document.querySelector("#media-fetch-help");
+const mediaFetchHelpCard = mediaFetchHelp.querySelector(".media-fetch-help-card");
+const mediaFetchHelpMessage = document.querySelector("#media-fetch-help-message");
+const mediaFetchPageUrl = document.querySelector("#media-fetch-page-url");
+const mediaFetchMediaAddressSection = document.querySelector("#media-fetch-media-address-section");
+const mediaFetchMediaUrl = document.querySelector("#media-fetch-media-url");
 let pendingSettingsReset = null;
 let settingsResetTrigger = null;
 const wallpaperSettingsTab = document.querySelector("#wallpaper-settings-tab");
@@ -56,6 +64,8 @@ const musicPlayer = document.querySelector("#custom-music-player");
 const musicVolume = document.querySelector("#music-volume");
 const musicVolumeValue = document.querySelector("#music-volume-value");
 const musicLoop = document.querySelector("#music-loop");
+const locationWeatherToggle = document.querySelector("#location-weather-toggle");
+const locationWeatherStatus = document.querySelector("#location-weather-status");
 const quoteDefaults = {
   welcome: "Take a breath. You're right where you need to be.",
   title: "Make today yours",
@@ -126,6 +136,10 @@ function updateWeatherIcon(weatherCode) {
   weatherIcon.parentElement.setAttribute("aria-label", `Current local weather: ${weather[2]}`);
 }
 
+function setLocationWeatherStatus(message) {
+  locationWeatherStatus.textContent = message;
+}
+
 async function loadWeatherForCoordinates(latitude, longitude) {
   const endpoint = new URL("https://api.open-meteo.com/v1/forecast");
   endpoint.search = new URLSearchParams({
@@ -145,14 +159,21 @@ async function loadWeatherForCoordinates(latitude, longitude) {
     weatherCode,
     savedAt: Date.now()
   }));
+  setLocationWeatherStatus(`Showing local weather: ${weatherIcon.title}.`);
 }
 
-function updateWeatherFromLocation() {
+async function updateWeatherFromLocation(showPermissionHelp = false) {
+  if (!locationWeatherToggle.checked) return;
+  if (!navigator.geolocation) {
+    setLocationWeatherStatus("Location isn't available in this browser.");
+    return;
+  }
+
   let cachedWeather;
   try {
     cachedWeather = JSON.parse(localStorage.getItem("stillroom-weather-cache") || "null");
-  } catch (error) {
-    console.warn("Could not read cached weather:", error);
+  } catch {
+    cachedWeather = null;
   }
 
   const cacheIsFresh = cachedWeather
@@ -162,23 +183,51 @@ function updateWeatherFromLocation() {
     && Date.now() - cachedWeather.savedAt < 30 * 60 * 1000;
   if (cacheIsFresh) {
     updateWeatherIcon(cachedWeather.weatherCode);
-    return;
+    setLocationWeatherStatus(`Showing local weather: ${weatherIcon.title}.`);
   }
 
-  if (!navigator.geolocation) {
-    console.warn("Weather icon was not updated: geolocation is unavailable.");
-    return;
+  try {
+    const permission = await navigator.permissions?.query({ name: "geolocation" });
+    if (!locationWeatherToggle.checked) return;
+    if (permission?.state === "denied") {
+      setLocationWeatherStatus("Location is blocked by Chrome. Allow Location in site settings to use local weather.");
+      if (showPermissionHelp) showToast("Location is blocked in Chrome. Allow Location for this extension in site settings.");
+      return;
+    }
+  } catch {
+    // Geolocation can still be attempted in browsers without Permissions API support.
   }
 
+  if (cacheIsFresh && !showPermissionHelp) return;
+  setLocationWeatherStatus("Waiting for location permission…");
   navigator.geolocation.getCurrentPosition(
-    ({ coords }) => loadWeatherForCoordinates(coords.latitude, coords.longitude)
-      .catch((error) => console.warn("Weather icon was not updated:", error)),
-    (error) => console.warn("Weather icon was not updated because location is unavailable:", error.message),
+    ({ coords }) => {
+      loadWeatherForCoordinates(coords.latitude, coords.longitude).catch((error) => {
+        setLocationWeatherStatus(`Couldn't load local weather: ${error.message}`);
+      });
+    },
+    (error) => {
+      setLocationWeatherStatus(error.code === error.PERMISSION_DENIED
+        ? "Location is blocked by Chrome. Allow Location in site settings to use local weather."
+        : "Couldn't get your location. Check your device's location settings and try again.");
+      if (showPermissionHelp && error.code === error.PERMISSION_DENIED) {
+        showToast("Location is blocked in Chrome. Allow Location for this extension in site settings.");
+      }
+    },
     { enableHighAccuracy: false, maximumAge: 30 * 60 * 1000, timeout: 10000 }
   );
 }
 
-updateWeatherFromLocation();
+const locationWeatherStorageKey = "stillroom-location-weather-enabled";
+try {
+  locationWeatherToggle.checked = localStorage.getItem(locationWeatherStorageKey) === "true";
+} catch (error) {
+  console.error("Couldn't read the location weather preference:", error);
+}
+setLocationWeatherStatus(locationWeatherToggle.checked
+  ? "Location weather is on."
+  : "Location weather is off.");
+if (locationWeatherToggle.checked) updateWeatherFromLocation();
 
 // ... (existing code before search form submit)
 
@@ -269,20 +318,19 @@ const suggestionCache = new Map();
 async function fetchSuggestions(query, signal) {
   if (!query) return [];
   try {
-    const response = await fetch(`https://suggestqueries.google.com/complete/search?client=chrome&q=${encodeURIComponent(query)}`, { signal });
+    const language = navigator.language || "en";
+    const response = await fetch(`https://suggestqueries.google.com/complete/search?client=chrome&hl=${encodeURIComponent(language)}&q=${encodeURIComponent(query)}`, { signal });
     if (!response.ok) {
       throw new Error(`Suggestion request failed with status ${response.status}`);
     }
-    const text = await response.text();
-
-    // Google suggests returns a JSONP-like response: [ "query", ["suggestion1", "suggestion2", ...], ... ]
-    // We need to clean it to be valid JSON by finding the first '['.
-    const startIdx = text.indexOf('[');
-    if (startIdx === -1) return [];
-
-    const jsonString = text.substring(startIdx);
-    const data = JSON.parse(jsonString);
-    return Array.isArray(data) && data[1] ? data[1] : [];
+    const data = await response.json();
+    if (!Array.isArray(data) || !Array.isArray(data[1])) return [];
+    const normalizedQuery = query.toLocaleLowerCase();
+    return [...new Set(data[1]
+      .filter((suggestion) => typeof suggestion === "string")
+      .map((suggestion) => suggestion.trim())
+      .filter((suggestion) => suggestion && suggestion.toLocaleLowerCase().startsWith(normalizedQuery)))]
+      .slice(0, 8);
   } catch (error) {
     if (error.name === "AbortError") return [];
     console.error("Error fetching suggestions:", error);
@@ -290,7 +338,26 @@ async function fetchSuggestions(query, signal) {
   }
 }
 
-function renderSuggestions(query, googleSuggestions = []) {
+function getCachedSuggestions(query) {
+  const normalizedQuery = query.toLowerCase();
+  const exactMatch = suggestionCache.get(normalizedQuery);
+  if (exactMatch && exactMatch.length > 0) return exactMatch;
+
+  const matches = [];
+  for (const [cachedQuery, cachedSuggestions] of suggestionCache) {
+    if (cachedQuery.startsWith(normalizedQuery) || normalizedQuery.startsWith(cachedQuery)) {
+      for (const suggestion of cachedSuggestions) {
+        if (suggestion.toLowerCase().startsWith(normalizedQuery)
+          && !matches.some((item) => item.toLowerCase() === suggestion.toLowerCase())) {
+          matches.push(suggestion);
+        }
+      }
+    }
+  }
+  return matches.slice(0, 8);
+}
+
+function renderSuggestions(query, googleSuggestions = [], showSearchFallback = false) {
   suggestionsContainer.innerHTML = "";
   suggestionFocusIndex = -1;
 
@@ -299,21 +366,26 @@ function renderSuggestions(query, googleSuggestions = []) {
     return;
   }
 
+  const normalizedQuery = query.toLocaleLowerCase();
   const combinedSuggestions = [];
 
-  // Add recent searches first (if they match the start of the query)
-  recentSearchesCache.forEach(item => {
-    if (item.query.toLowerCase().startsWith(query.toLowerCase())) {
+  recentSearchesCache.forEach((item) => {
+    const recentQuery = item.query.trim().replace(/\s+/g, " ");
+    if (recentQuery.toLocaleLowerCase().startsWith(normalizedQuery)) {
       combinedSuggestions.push({ text: item.query, isRecent: true });
     }
   });
 
-  // Add Google suggestions
-  googleSuggestions.forEach(text => {
-    if (!combinedSuggestions.some(s => s.text.toLowerCase() === text.toLowerCase())) {
-      combinedSuggestions.push({ text: text, isRecent: false });
+  googleSuggestions.forEach((text) => {
+    if (text.toLocaleLowerCase().startsWith(normalizedQuery)
+      && !combinedSuggestions.some((suggestion) => suggestion.text.toLocaleLowerCase() === text.toLocaleLowerCase())) {
+      combinedSuggestions.push({ text, isRecent: false });
     }
   });
+
+  if (combinedSuggestions.length === 0 && showSearchFallback) {
+    combinedSuggestions.push({ text: `Search for “${query}”`, query, isRecent: false });
+  }
 
   if (combinedSuggestions.length === 0) {
     suggestionsContainer.hidden = true;
@@ -340,9 +412,10 @@ function renderSuggestions(query, googleSuggestions = []) {
 
     const label = document.createElement("span");
     label.textContent = suggestion.text;
+    item.dataset.query = suggestion.query || suggestion.text;
     item.append(icon, label);
     item.addEventListener("click", () => {
-      searchInput.value = suggestion.text;
+      searchInput.value = item.dataset.query;
       document.querySelector("#search-form").dispatchEvent(new Event("submit"));
     });
     suggestionsContainer.appendChild(item);
@@ -359,7 +432,7 @@ function updateFocus() {
 }
 
 searchInput.addEventListener("input", () => {
-  const query = searchInput.value.trim();
+  const query = searchInput.value.trim().replace(/\s+/g, " ");
 
   clearTimeout(debounceTimer);
   suggestionRequestId += 1;
@@ -369,18 +442,23 @@ searchInput.addEventListener("input", () => {
     suggestionAbortController = null;
   }
 
-  renderSuggestions(query, suggestionCache.get(query.toLowerCase()) || []);
-  if (!query) return;
+  renderSuggestions(query, getCachedSuggestions(query), true);
+  if (query.length < 2) return;
 
   debounceTimer = window.setTimeout(async () => {
     const controller = new AbortController();
     suggestionAbortController = controller;
     const googleSuggestions = await fetchSuggestions(query, controller.signal);
-    if (requestId !== suggestionRequestId || searchInput.value.trim() !== query) return;
+    if (requestId !== suggestionRequestId
+      || searchInput.value.trim().replace(/\s+/g, " ") !== query) return;
 
-    suggestionCache.set(query.toLowerCase(), googleSuggestions);
-    renderSuggestions(query, googleSuggestions);
-  }, 80);
+    const cacheKey = query.toLowerCase();
+    if (suggestionCache.size >= 80 && !suggestionCache.has(cacheKey)) {
+      suggestionCache.delete(suggestionCache.keys().next().value);
+    }
+    suggestionCache.set(cacheKey, googleSuggestions);
+    renderSuggestions(query, googleSuggestions, true);
+  }, 180);
 });
 
 getRecentSearches()
@@ -388,7 +466,7 @@ getRecentSearches()
     recentSearchesCache = searches.slice(0, 10);
     const query = searchInput.value.trim();
     if (query) {
-      renderSuggestions(query, suggestionCache.get(query.toLowerCase()) || []);
+      renderSuggestions(query, getCachedSuggestions(query), true);
     }
   })
   .catch((error) => console.error("Error loading recent searches:", error));
@@ -409,8 +487,7 @@ searchInput.addEventListener("keydown", (e) => {
     if (suggestionFocusIndex !== -1) {
       e.preventDefault();
       textBeforeRightArrow = searchInput.value;
-      const selectedText = items[suggestionFocusIndex].textContent.trim();
-      searchInput.value = selectedText;
+      searchInput.value = items[suggestionFocusIndex].dataset.query;
     }
   } else if (e.key === "ArrowLeft") {
     if (suggestionFocusIndex !== -1) {
@@ -423,8 +500,7 @@ searchInput.addEventListener("keydown", (e) => {
     }
   } else if (e.key === "Enter" && suggestionFocusIndex !== -1) {
     e.preventDefault();
-    const selectedText = items[suggestionFocusIndex].textContent.trim();
-    searchInput.value = selectedText;
+    searchInput.value = items[suggestionFocusIndex].dataset.query;
     document.querySelector("#search-form").dispatchEvent(new Event("submit"));
   } else if (e.key === "Escape") {
     suggestionsContainer.hidden = true;
@@ -574,6 +650,37 @@ function saveQuotes() {
   }
 }
 
+function setLocationWeatherEnabled(enabled, showPermissionHelp = false, previousValue = !enabled) {
+  locationWeatherToggle.checked = enabled;
+  try {
+    if (enabled) localStorage.setItem(locationWeatherStorageKey, "true");
+    else {
+      localStorage.removeItem(locationWeatherStorageKey);
+      localStorage.removeItem("stillroom-weather-cache");
+    }
+  } catch (error) {
+    locationWeatherToggle.checked = previousValue;
+    console.error("Couldn't save the location weather preference:", error);
+    showToast("Couldn't save your location weather setting");
+    return false;
+  }
+
+  if (!enabled) {
+    weatherIcon.textContent = "☀";
+    weatherIcon.removeAttribute("title");
+    weatherIcon.parentElement.setAttribute("aria-label", "A little weather-inspired note");
+    setLocationWeatherStatus("Location weather is off.");
+  } else {
+    setLocationWeatherStatus("Location weather is on. Checking permission…");
+    updateWeatherFromLocation(showPermissionHelp);
+  }
+  return true;
+}
+
+locationWeatherToggle.addEventListener("change", () => {
+  setLocationWeatherEnabled(locationWeatherToggle.checked, true, !locationWeatherToggle.checked);
+});
+
 for (const key of Object.keys(quoteDefaults)) {
   quoteInputs[key].addEventListener("input", () => {
     quoteElements[key].textContent = quoteInputs[key].value;
@@ -602,6 +709,46 @@ function showToast(message) {
   toastElement.textContent = message;
   toastElement.classList.add("is-visible");
   window.setTimeout(() => toastElement.classList.remove("is-visible"), 2400);
+}
+
+function showWallpaperNotice(message, timeout = 5000) {
+  window.clearTimeout(wallpaperNoticeTimeout);
+  wallpaperNotice.textContent = message;
+  wallpaperNotice.hidden = false;
+  wallpaperNoticeTimeout = timeout === null
+    ? null
+    : window.setTimeout(() => {
+      wallpaperNotice.hidden = true;
+      wallpaperNotice.textContent = "";
+      wallpaperNoticeTimeout = null;
+    }, timeout);
+}
+
+function clearWallpaperNotice() {
+  window.clearTimeout(wallpaperNoticeTimeout);
+  wallpaperNoticeTimeout = null;
+  wallpaperNotice.hidden = true;
+  wallpaperNotice.textContent = "";
+}
+
+function showMediaFetchHelp(message, pageUrl, mediaUrl = "") {
+  mediaFetchHelpMessage.textContent = message;
+  mediaFetchPageUrl.value = pageUrl;
+  mediaFetchMediaUrl.value = mediaUrl;
+  mediaFetchMediaAddressSection.hidden = !mediaUrl;
+  mediaFetchHelp.hidden = false;
+  mediaFetchHelpCard.focus();
+}
+
+async function copyMediaAddress(input, label) {
+  try {
+    await navigator.clipboard.writeText(input.value);
+    showToast(`${label} copied`);
+  } catch (error) {
+    input.focus();
+    input.select();
+    showWallpaperNotice(`Couldn't copy the address: ${error.message}. Select it and press Ctrl+C.`);
+  }
 }
 
 const saveToggle = document.querySelector(".save-toggle");
@@ -884,8 +1031,7 @@ function renderMusicTracks() {
           savedMusicTracks = savedMusicTracks.map((item) => item.id === track.id ? updatedTrack : item);
           renderMusicTracks();
         } catch (error) {
-          wallpaperNotice.textContent = `Couldn't rename track: ${error.message}`;
-          wallpaperNotice.hidden = false;
+          showWallpaperNotice(`Couldn't rename track: ${error.message}`);
         }
       });
     }
@@ -1070,8 +1216,7 @@ musicUpload.addEventListener("change", async () => {
   if (!file) return;
   musicUpload.value = "";
   if (!isSupportedAudioFile(file)) {
-    wallpaperNotice.textContent = "Choose a supported audio file to upload";
-    wallpaperNotice.hidden = false;
+    showWallpaperNotice("Choose a supported audio file to upload");
     return;
   }
 
@@ -1085,11 +1230,9 @@ musicUpload.addEventListener("change", async () => {
     await saveMusicTrack(track);
     savedMusicTracks.push(track);
     renderMusicTracks();
-    wallpaperNotice.textContent = "Music added to your library";
-    wallpaperNotice.hidden = false;
+    showWallpaperNotice("Music added to your library");
   } catch (error) {
-    wallpaperNotice.textContent = `Couldn't upload music: ${error.message}`;
-    wallpaperNotice.hidden = false;
+    showWallpaperNotice(`Couldn't upload music: ${error.message}`);
   }
 });
 
@@ -1143,9 +1286,23 @@ function openWallpaperContextMenu(event, card) {
   event.preventDefault();
   contextWallpaperId = card.dataset.wallpaperId;
   wallpaperContextMenu.hidden = false;
+  wallpaperContextMenu.style.left = "0px";
+  wallpaperContextMenu.style.top = "0px";
   const bounds = wallpaperContextMenu.getBoundingClientRect();
-  wallpaperContextMenu.style.left = `${Math.max(8, Math.min(event.clientX, window.innerWidth - bounds.width - 8))}px`;
-  wallpaperContextMenu.style.top = `${Math.max(8, Math.min(event.clientY, window.innerHeight - bounds.height - 8))}px`;
+  const dialogBounds = wallpaperDialog.getBoundingClientRect();
+  const inset = 8;
+  const cardBounds = card.getBoundingClientRect();
+  const dialogLeft = dialogBounds.left + wallpaperDialog.clientLeft;
+  const dialogTop = dialogBounds.top + wallpaperDialog.clientTop;
+  const left = cardBounds.left + cardBounds.width / 2 - dialogLeft - bounds.width / 2;
+  const aboveTop = cardBounds.top - dialogTop - bounds.height - inset;
+  const top = aboveTop >= inset
+    ? aboveTop
+    : cardBounds.bottom - dialogTop + inset;
+  const maxLeft = wallpaperDialog.clientWidth - bounds.width - inset;
+  const maxTop = wallpaperDialog.clientHeight - bounds.height - inset;
+  wallpaperContextMenu.style.left = `${Math.max(inset, Math.min(left, maxLeft))}px`;
+  wallpaperContextMenu.style.top = `${Math.max(inset, Math.min(top, maxTop))}px`;
   wallpaperContextMenu.querySelector("button")?.focus();
 }
 
@@ -1570,8 +1727,7 @@ function updateWallpaperPreview() {
 }
 
 function openWallpaperEditor(wallpaper) {
-  wallpaperNotice.hidden = true;
-  wallpaperNotice.textContent = "";
+  clearWallpaperNotice();
 
   // Normalize and assign as editing wallpaper
   editingWallpaper = normalizeWallpaper(wallpaper);
@@ -1595,8 +1751,7 @@ function openWallpaperEditor(wallpaper) {
 }
 
 function showWallpaperLibrary() {
-  wallpaperNotice.hidden = true;
-  wallpaperNotice.textContent = "";
+  clearWallpaperNotice();
   editingWallpaper = null;
   wallpaperDeleteConfirm.hidden = true;
   wallpaperEditor.hidden = true;
@@ -1614,8 +1769,7 @@ function showWallpaperLibrary() {
 }
 
 function showMusicLibrary() {
-  wallpaperNotice.hidden = true;
-  wallpaperNotice.textContent = "";
+  clearWallpaperNotice();
   wallpaperEditor.hidden = true;
   wallpaperLibrary.hidden = true;
   musicLibrary.hidden = false;
@@ -1631,8 +1785,7 @@ function showMusicLibrary() {
 }
 
 function showQuotesLibrary() {
-  wallpaperNotice.hidden = true;
-  wallpaperNotice.textContent = "";
+  clearWallpaperNotice();
   wallpaperEditor.hidden = true;
   wallpaperLibrary.hidden = true;
   musicLibrary.hidden = true;
@@ -1852,11 +2005,18 @@ document.querySelector("#music-reset-settings").addEventListener("click", () => 
 document.querySelector("#quotes-reset-settings").addEventListener("click", () => {
   requestSettingsReset("Quotes", () => {
     const previous = { ...currentQuotes };
+    const previousLocationWeather = locationWeatherToggle.checked;
     currentQuotes = { ...quoteDefaults };
     renderQuotes();
+    if (!setLocationWeatherEnabled(false, false, previousLocationWeather)) {
+      currentQuotes = previous;
+      renderQuotes();
+      return;
+    }
     if (!saveQuotes()) {
       currentQuotes = previous;
       renderQuotes();
+      setLocationWeatherEnabled(previousLocationWeather, false, false);
       return;
     }
     showToast("Quotes reset");
@@ -1958,8 +2118,7 @@ document.querySelector("#wallpaper-apply").addEventListener("click", async () =>
   try {
     await persistWallpaperSelection(false);
   } catch (error) {
-    wallpaperNotice.textContent = `Couldn't apply wallpaper: ${error.message}`;
-    wallpaperNotice.hidden = false;
+    showWallpaperNotice(`Couldn't apply wallpaper: ${error.message}`);
   }
 });
 
@@ -1967,8 +2126,7 @@ document.querySelector("#wallpaper-set-default").addEventListener("click", async
   try {
     await persistWallpaperSelection(true);
   } catch (error) {
-    wallpaperNotice.textContent = `Couldn't set default wallpaper: ${error.message}`;
-    wallpaperNotice.hidden = false;
+    showWallpaperNotice(`Couldn't set default wallpaper: ${error.message}`);
   }
 });
 
@@ -2009,8 +2167,7 @@ document.querySelector("#wallpaper-delete-confirm-button").addEventListener("cli
     renderWallpaperGrid();
     showToast("Wallpaper deleted");
   } catch (error) {
-    wallpaperNotice.textContent = `Couldn't delete wallpaper: ${error.message}`;
-    wallpaperNotice.hidden = false;
+    showWallpaperNotice(`Couldn't delete wallpaper: ${error.message}`);
   }
 });
 
@@ -2066,8 +2223,7 @@ async function handleWallpaperUpload(file, sourceInput) {
   if (!file) return false;
   const mediaType = determineMediaType(file);
   if (mediaType === "unknown") {
-    wallpaperNotice.textContent = "Choose an image or video file to upload";
-    wallpaperNotice.hidden = false;
+    showWallpaperNotice("Choose an image or video file to upload");
     return false;
   }
 
@@ -2091,16 +2247,74 @@ async function handleWallpaperUpload(file, sourceInput) {
     if (sourceInput) sourceInput.value = "";
     openWallpaperEditor(record);
 
-    wallpaperNotice.textContent = "Wallpaper added to your library";
-    wallpaperNotice.hidden = false;
+    showWallpaperNotice("Wallpaper added to your library");
     return true;
   } catch (error) {
     if (sourceInput) sourceInput.value = "";
-    wallpaperNotice.textContent = `Couldn't upload wallpaper: ${error.message}`;
-    wallpaperNotice.hidden = false;
+    showWallpaperNotice(`Couldn't upload wallpaper: ${error.message}`);
     return false;
   }
 }
+
+async function pasteWallpaperImage() {
+  if (!navigator.clipboard?.read) {
+    showWallpaperNotice("Clipboard image access is unavailable. Press Ctrl+V here after copying an image.");
+    return;
+  }
+
+  try {
+    const clipboardItems = await navigator.clipboard.read();
+    for (const item of clipboardItems) {
+      const imageType = item.types.find((type) => type.startsWith("image/"));
+      if (!imageType) continue;
+      const blob = await item.getType(imageType);
+      const extension = imageType.split("/")[1].replace("jpeg", "jpg");
+      const file = new File([blob], `pasted-image.${extension}`, { type: imageType });
+      if (await handleWallpaperUpload(file, null)) return;
+    }
+    showWallpaperNotice("There is no image in the clipboard. Copy an image, then try Paste image again.");
+  } catch (error) {
+    showWallpaperNotice(`Couldn't read an image from the clipboard: ${error.message}. Try pressing Ctrl+V or uploading the image file.`);
+  }
+}
+
+wallpaperPasteImageButton.addEventListener("click", pasteWallpaperImage);
+
+document.addEventListener("paste", (event) => {
+  if (!wallpaperDialog.open || wallpaperLibrary.hidden) return;
+  const imageItem = Array.from(event.clipboardData?.items || [])
+    .find((item) => item.kind === "file" && item.type.startsWith("image/"));
+  if (!imageItem) return;
+
+  const imageFile = imageItem.getAsFile();
+  if (!imageFile) return;
+  event.preventDefault();
+  handleWallpaperUpload(imageFile, null);
+});
+
+document.querySelector("#media-fetch-help-close").addEventListener("click", () => {
+  mediaFetchHelp.hidden = true;
+});
+
+mediaFetchHelp.addEventListener("click", (event) => {
+  if (event.target === mediaFetchHelp) mediaFetchHelp.hidden = true;
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !mediaFetchHelp.hidden) {
+    event.preventDefault();
+    event.stopPropagation();
+    mediaFetchHelp.hidden = true;
+  }
+}, true);
+
+document.querySelector("#media-fetch-copy-page").addEventListener("click", () => {
+  copyMediaAddress(mediaFetchPageUrl, "Page address");
+});
+
+document.querySelector("#media-fetch-copy-media").addEventListener("click", () => {
+  copyMediaAddress(mediaFetchMediaUrl, "Media address");
+});
 
 wallpaperImageUpload.addEventListener("change", () => {
   if (wallpaperImageUpload.files && wallpaperImageUpload.files[0]) {
@@ -2124,30 +2338,80 @@ wallpaperUrlForm.addEventListener("submit", async (event) => {
       throw new Error("Only HTTP and HTTPS media URLs are supported.");
     }
   } catch (error) {
-    wallpaperNotice.textContent = `Couldn't fetch wallpaper: ${error.message || "Enter a valid HTTP or HTTPS URL."}`;
-    wallpaperNotice.hidden = false;
+    showWallpaperNotice(`Couldn't fetch wallpaper: ${error.message || "Enter a valid HTTP or HTTPS URL."}`);
     return;
   }
 
   wallpaperUrlFetchButton.disabled = true;
-  wallpaperNotice.textContent = "Fetching media from URL…";
-  wallpaperNotice.hidden = false;
+  showWallpaperNotice("Fetching media from URL…", null);
+  const controller = new AbortController();
+  let fetchTimeout = null;
+  let mediaPageUrl = sourceUrl.href;
+  let discoveredMediaUrl = "";
   try {
-    if (globalThis.chrome?.permissions?.request) {
-      const permissionOrigin = `${sourceUrl.protocol}//${sourceUrl.hostname}/*`;
-      const granted = await chrome.permissions.request({ origins: [permissionOrigin] });
-      if (!granted) throw new Error("Site access was not granted. Allow access to fetch from this domain.");
-    }
-
-    const response = await fetch(sourceUrl.href);
+    fetchTimeout = window.setTimeout(() => controller.abort(), 30000);
+    let response = await fetch(sourceUrl.href, { signal: controller.signal });
     if (!response.ok) throw new Error(`The server responded with status ${response.status}.`);
     if (response.type === "opaque") {
       throw new Error("The server did not allow access to this media. Use a direct URL that permits cross-origin fetching.");
     }
+
+    let mediaUrl = new URL(response.url || sourceUrl.href);
+    mediaPageUrl = mediaUrl.href;
+    let contentType = (response.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+    if (contentType === "text/html" || contentType === "application/xhtml+xml") {
+      const page = new DOMParser().parseFromString(await response.text(), "text/html");
+      const mediaSelectors = [
+        'meta[property="og:video:secure_url"]',
+        'meta[property="og:video:url"]',
+        'meta[property="og:video"]',
+        'meta[name="twitter:player:stream"]',
+        'meta[property="twitter:player:stream"]',
+        "video source[src]",
+        "video[src]",
+        'meta[property="og:image:secure_url"]',
+        'meta[property="og:image"]',
+        'meta[name="twitter:image"]',
+        'meta[property="twitter:image:src"]'
+      ];
+      const mediaValue = mediaSelectors
+        .map((selector) => {
+          const element = page.querySelector(selector);
+          return element?.getAttribute("content")?.trim() || element?.getAttribute("src")?.trim();
+        })
+        .find(Boolean);
+      if (!mediaValue) {
+        throw new Error("This page doesn't expose a direct image or video URL. It may load media with scripts, require sign-in, or use a protected video stream.");
+      }
+      try {
+        mediaUrl = new URL(mediaValue, mediaUrl);
+      } catch {
+        throw new Error("The page contains an invalid image or video address.");
+      }
+      if (!["http:", "https:"].includes(mediaUrl.protocol)) {
+        throw new Error("The page media address must use an HTTP or HTTPS URL.");
+      }
+      discoveredMediaUrl = mediaUrl.href;
+      response = await fetch(mediaUrl.href, { signal: controller.signal });
+      if (!response.ok) throw new Error(`The media server responded with status ${response.status}.`);
+      if (response.type === "opaque") {
+        throw new Error("The media server blocked access to the file. The address is shown so you can try opening it directly.");
+      }
+      mediaUrl = new URL(response.url || mediaUrl.href);
+      discoveredMediaUrl = mediaUrl.href;
+      contentType = (response.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+    } else {
+      discoveredMediaUrl = mediaUrl.href;
+    }
+
+    if (contentType === "text/html" || contentType === "application/xhtml+xml") {
+      throw new Error("The media address returned a web page instead of an image or video file. The site may require sign-in or use a protected stream.");
+    }
+
     const blob = await response.blob();
     if (blob.size === 0) throw new Error("The URL returned an empty file.");
-    const contentType = (response.headers.get("content-type") || blob.type).split(";")[0].trim().toLowerCase();
-    let filename = sourceUrl.pathname.split("/").pop() || "";
+    contentType = contentType || blob.type.toLowerCase();
+    let filename = mediaUrl.pathname.split("/").pop() || "";
     try {
       filename = decodeURIComponent(filename).replace(/[\\/]/g, "_");
     } catch {
@@ -2169,12 +2433,15 @@ wallpaperUrlForm.addEventListener("submit", async (event) => {
     }
     if (await handleWallpaperUpload(mediaFile, null)) wallpaperUrlInput.value = "";
   } catch (error) {
-    const detail = error instanceof TypeError
+    const detail = error.name === "AbortError"
+      ? "Fetching the media timed out. Check the URL and try again."
+      : error instanceof TypeError
       ? "The URL is unreachable or the server blocked cross-origin access (CORS). Try a direct media URL from a site that permits fetching."
       : error.message;
-    wallpaperNotice.textContent = `Couldn't fetch media: ${detail}`;
-    wallpaperNotice.hidden = false;
+    showWallpaperNotice(`Couldn't fetch media: ${detail}`);
+    showMediaFetchHelp(detail, mediaPageUrl, discoveredMediaUrl);
   } finally {
+    window.clearTimeout(fetchTimeout);
     wallpaperUrlFetchButton.disabled = false;
   }
 });
