@@ -121,31 +121,61 @@ button { color: inherit; }
 }
 
 .clock {
-  font-size: clamp(76px, 9.2vw, 132px);
+  font-size: calc(clamp(76px, 9.2vw, 132px) * var(--widget-scale, 1));
   font-weight: 400;
   letter-spacing: -.075em;
   line-height: .98;
   text-shadow: 0 4px 28px rgba(0, 0, 0, .15);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  /* Flex centreing keeps a wider string (e.g. "12:09 PM") balanced around the
+     widget's centre instead of spilling off to one side. */
+  display: flex;
+  justify-content: center;
+  align-items: baseline;
+}
+
+/* 12-hour mode: a compact AM/PM marker beside the time, so the clock never
+   spills onto a second line. */
+.clock-meridiem {
+  margin-left: .1em;
+  font-size: .3em;
+  font-weight: 500;
+  letter-spacing: .06em;
+  opacity: .88;
 }
 
 .date {
   margin-top: 16px;
-  font-size: clamp(18px, 2vw, 26px);
+  font-size: calc(clamp(18px, 2vw, 26px) * var(--widget-scale, 1));
   font-weight: 600;
   letter-spacing: -.025em;
   text-shadow: 0 2px 12px rgba(0, 0, 0, .2);
+  /* Same reason as .clock: a longer weekday string stays centred. */
+  display: flex;
+  justify-content: center;
+  align-items: baseline;
+  white-space: nowrap;
 }
 
 .weather {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 13px;
   margin: 19px 0 0;
   text-align: left;
 }
 
 .weather-icon { color: #ffcf51; font-size: 30px; line-height: 1; }
+
+/* Weather glyphs must come from a colour emoji font; without it they fall
+   back to monochrome symbol drawings (☁, ❄, ⛈ especially). */
+.weather-icon,
+.weather-widget-icon,
+.weather-forecast-icon {
+  font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", "Twemoji Mozilla", sans-serif;
+}
 .weather-copy { display: grid; gap: 1px; }
 .weather-copy strong { font-size: 17px; font-weight: 600; }
 .weather-copy span { color: rgba(255, 255, 255, .82); font-size: 13px; }
@@ -166,9 +196,10 @@ button { color: inherit; }
   overflow: hidden;
   border: 1px solid rgba(235, 252, 255, .23);
   border-radius: 12px;
-  background: rgba(219, 237, 238, .2);
+  background: var(--search-bg, rgba(219, 237, 238, .2));
   box-shadow: 0 12px 42px rgba(4, 16, 21, .14), inset 0 1px rgba(255, 255, 255, .08);
-  backdrop-filter: blur(18px);
+  backdrop-filter: blur(var(--widget-blur, 18px));
+  -webkit-backdrop-filter: blur(var(--widget-blur, 18px));
   transition: background .2s ease, border-color .2s ease, box-shadow .2s ease;
 }
 
@@ -216,7 +247,7 @@ button { color: inherit; }
 
 .search:focus-within {
   border-color: rgba(255, 255, 255, .56);
-  background: rgba(219, 237, 238, .27);
+  background: var(--search-bg-focus, rgba(219, 237, 238, .27));
   box-shadow: 0 12px 42px rgba(4, 16, 21, .2), 0 0 0 3px rgba(255, 255, 255, .08);
 }
 
@@ -267,17 +298,18 @@ button { color: inherit; }
   border: 1px solid rgba(240, 250, 250, .08);
   border-radius: 13px;
   color: white;
-  background: rgba(226, 241, 242, .12);
+  background: var(--shortcut-bg, rgba(226, 241, 242, .12));
   text-decoration: none;
   text-shadow: 0 1px 7px rgba(0, 0, 0, .3);
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(var(--widget-blur, 12px));
+  -webkit-backdrop-filter: blur(var(--widget-blur, 12px));
   transition: transform .2s ease, background .2s ease, border-color .2s ease;
 }
 
 .shortcut:hover {
   transform: translateY(-4px);
   border-color: rgba(255, 255, 255, .25);
-  background: rgba(226, 241, 242, .23);
+  background: var(--shortcut-bg-hover, rgba(226, 241, 242, .23));
 }
 
 .shortcut > span:last-child { font-size: 13px; font-weight: 500; }
@@ -302,6 +334,9 @@ button { color: inherit; }
   font-size: clamp(32px, 4vw, 52px);
   font-weight: 400;
   line-height: 1.15;
+  /* Never wrap to a second line when a longer greeting ("Good afternoon")
+     arrives than the width the widget captured at load. */
+  white-space: nowrap;
 }
 
 .welcome p { margin: 8px 0 0; font-size: 15px; font-style: italic; }
@@ -400,6 +435,7 @@ button { color: inherit; }
 
 .toast {
   position: absolute;
+  z-index: 200;
   top: 26px;
   left: 50%;
   padding: 10px 16px;
@@ -442,7 +478,7 @@ button { color: inherit; }
 
 .wallpaper-dialog::backdrop { background: rgba(5, 13, 17, .62); backdrop-filter: blur(5px); }
 .wallpaper-dialog[open] { animation: settings-drawer-arrive .26s cubic-bezier(.2,.75,.25,1) both; }
-.settings-sidebar { display: flex; flex-direction: column; gap: 12px; padding: 28px 12px; border-right: 1px solid rgba(255, 255, 255, .1); background: rgba(8, 20, 24, .25); }
+.settings-sidebar { display: flex; flex-direction: column; gap: 12px; padding: 28px 12px; border-right: 1px solid rgba(255, 255, 255, .1); background: rgba(8, 20, 24, calc(.25 * var(--settings-card-fade, 1))); }
 .settings-sidebar-label, .settings-eyebrow { color: rgba(255, 255, 255, .48); font-size: 10px; font-weight: 700; letter-spacing: .14em; }
 .settings-sidebar-label { padding: 0 9px; }
 .settings-nav-item { display: flex; min-height: 42px; align-items: center; gap: 10px; padding: 0 10px; border: 1px solid transparent; border-radius: 9px; color: rgba(255, 255, 255, .72); background: transparent; font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
@@ -618,6 +654,100 @@ button { color: inherit; }
 .wallpaper-card-label small { color: rgba(255, 255, 255, .78); font-size: 10px; font-weight: 400; }
 .wallpaper-card-badge { position: absolute; z-index: 1; top: 8px; right: 8px; padding: 4px 7px; border-radius: 20px; background: rgba(10, 22, 26, .72); font-size: 10px; }
 .wallpaper-empty { grid-column: 1 / -1; margin: 0; padding: 20px 12px; border: 1px dashed rgba(255, 255, 255, .18); border-radius: 10px; color: rgba(255, 255, 255, .62); font-size: 12px; text-align: center; }
+.rotation-setting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 12px 0 0;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, .13);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, .05);
+}
+.rotation-setting strong { display: block; color: rgba(255, 255, 255, .9); font-size: 13px; font-weight: 600; }
+.rotation-setting p { margin: 5px 0 0; color: rgba(255, 255, 255, .58); font-size: 11px; line-height: 1.4; }
+.rotation-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 10px; }
+.rotation-actions .upload-button { justify-content: center; min-width: 132px; }
+.rotation-actions .upload-button:disabled { opacity: .5; cursor: default; }
+.rotation-empty { margin: 0; }
+.rotation-list { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.rotation-list[hidden] { display: none; }
+.rotation-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 6px 32px 6px 6px;
+  border: 1px solid rgba(168, 225, 213, .2);
+  border-radius: 11px;
+  background: rgba(125, 203, 190, .12);
+}
+.rotation-item-thumb { width: 40px; height: 40px; flex: 0 0 40px; border-radius: 8px; background-color: #29434a; background-position: center; background-size: cover; background-repeat: no-repeat; }
+.rotation-item-name { min-width: 0; overflow: hidden; color: rgba(255, 255, 255, .9); font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.rotation-item-remove {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  transform: translateY(-50%);
+  border: 1px solid rgba(255, 255, 255, .2);
+  border-radius: 50%;
+  color: rgba(255, 255, 255, .82);
+  background: rgba(255, 255, 255, .08);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+.rotation-item-remove:hover { background: rgba(255, 255, 255, .18); }
+.rotation-picker {
+  position: absolute;
+  z-index: 2;
+  inset: 18px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px;
+  overflow: auto;
+  border: 1px solid rgba(255, 255, 255, .17);
+  border-radius: 15px;
+  background: rgba(19, 35, 40, .98);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .32);
+  animation: editor-arrive .18s ease-out both;
+}
+.rotation-picker[hidden], .rotation-picker-grid[hidden] { display: none; }
+.rotation-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-content: start;
+  gap: 10px;
+  overflow-y: auto;
+  padding: 2px 4px 5px 0;
+  scrollbar-color: rgba(255, 255, 255, .35) transparent;
+  scrollbar-width: thin;
+}
+.rotation-option {
+  position: relative;
+  display: block;
+  height: 122px;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: #29434a;
+  cursor: pointer;
+}
+.rotation-option-preview { position: absolute; inset: 0; background-color: #29434a; background-position: center; background-size: cover; background-repeat: no-repeat; }
+.rotation-option-preview::before { position: absolute; inset: 0; background: linear-gradient(transparent 25%, rgba(0, 0, 0, .72)); content: ""; }
+.rotation-option:hover { border-color: rgba(255, 255, 255, .6); }
+.rotation-option.is-selected { border-color: rgba(168, 225, 213, .85); box-shadow: inset 0 0 0 2px rgba(168, 225, 213, .32); }
+.rotation-option input { position: absolute; z-index: 2; top: 8px; right: 8px; width: 17px; height: 17px; margin: 0; accent-color: #a8e1d5; cursor: pointer; }
+.rotation-option-name { position: relative; z-index: 1; display: block; padding: 8px; color: white; font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
+.rotation-option:has(input:focus-visible) { outline: 2px solid rgba(136, 216, 200, .75); outline-offset: 2px; }
 .wallpaper-editor[hidden], .wallpaper-library[hidden], .music-library[hidden] { display: none; }
 .music-library { margin-top: 1px; }
 .music-controls { display: grid; gap: 14px; margin: 22px 0 18px; }
@@ -709,6 +839,69 @@ button { color: inherit; }
 .toggle-switch input:checked { border-color: rgba(168, 225, 213, .7); background: rgba(125, 203, 190, .42); }
 .toggle-switch input:checked::before { transform: translateX(18px); background: #d6fff5; }
 .toggle-switch input:focus-visible { outline: 2px solid #a8e1d5; outline-offset: 3px; }
+.time-weather-library { margin-top: 1px; }
+.time-weather-library[hidden] { display: none; }
+.location-current {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid rgba(168, 225, 213, .22);
+  border-radius: 11px;
+  background: rgba(125, 203, 190, .1);
+}
+.location-current[hidden] { display: none; }
+.location-current-icon { font-size: 22px; line-height: 1; }
+.location-current-copy { display: grid; gap: 2px; min-width: 0; }
+.location-current-copy strong { overflow-wrap: anywhere; color: rgba(255, 255, 255, .92); font-size: 14px; font-weight: 600; }
+.location-current-copy span { color: rgba(255, 255, 255, .58); font-size: 11px; }
+.manual-location {
+  display: grid;
+  gap: 11px;
+  margin-top: 18px;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, .13);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, .05);
+}
+.manual-location-copy strong { display: block; color: rgba(255, 255, 255, .9); font-size: 13px; font-weight: 600; }
+.manual-location-copy p { margin: 5px 0 0; color: rgba(255, 255, 255, .58); font-size: 11px; line-height: 1.4; }
+.manual-location-fields { display: flex; flex-wrap: wrap; gap: 8px; }
+.manual-location-fields input {
+  flex: 1 1 180px;
+  min-width: 0;
+  min-height: 40px;
+  padding: 0 11px;
+  border: 1px solid rgba(255, 255, 255, .2);
+  border-radius: 8px;
+  color: white;
+  background: rgba(0, 0, 0, .12);
+  font: inherit;
+  font-size: 13px;
+}
+.manual-location-fields input::placeholder { color: rgba(255, 255, 255, .48); }
+.manual-location-fields input:focus { outline: 2px solid rgba(136, 216, 200, .75); outline-offset: 1px; }
+.manual-location-fields .upload-button { justify-content: center; }
+.manual-location-status { margin: 0; color: #ffd1a6; font-size: 12px; }
+.manual-location-status[hidden] { display: none; }
+.manual-location-results { display: grid; gap: 8px; }
+.manual-location-results:empty { display: none; }
+.location-result {
+  display: grid;
+  gap: 3px;
+  padding: 11px 12px;
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 9px;
+  color: white;
+  background: rgba(255, 255, 255, .05);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.location-result:hover { background: rgba(255, 255, 255, .14); border-color: rgba(168, 225, 213, .4); }
+.location-result-name { font-size: 13px; font-weight: 600; }
+.location-result-coords { color: rgba(255, 255, 255, .55); font-size: 11px; }
 .wallpaper-editor {
   position: absolute;
   z-index: 2;
@@ -912,7 +1105,7 @@ button { color: inherit; }
   .save-toggle { right: 18px; }
   .settings-toggle { right: 72px; }
   .center-panel { width: 100%; margin-top: -6vh; }
-  .clock { font-size: clamp(66px, 19vw, 104px); }
+  .clock { font-size: calc(clamp(66px, 19vw, 104px) * var(--widget-scale, 1)); }
   .date { margin-top: 10px; }
   .weather { margin-top: 15px; }
   .search { height: 54px; margin-top: 34px; }
@@ -946,6 +1139,12 @@ button { color: inherit; }
   .music-track { grid-template-columns: minmax(0, 1fr); }
   .music-track-actions { justify-content: flex-start; }
   .wallpaper-card, .wallpaper-card-placeholder { height: 92px; }
+  .rotation-list, .rotation-picker-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .rotation-option { height: 92px; }
+  .manual-location-fields { gap: 6px; }
+  .manual-location-fields .upload-button { flex: 1 1 auto; }
+  .rotation-actions .upload-button { min-width: 0; flex: 1 1 auto; }
+  .rotation-picker { inset: 12px 7px; padding: 13px; }
   .wallpaper-card-preview { padding: 8px; }
   .wallpaper-editor { inset: 12px 7px; padding: 13px; }
   .wallpaper-editor-actions { flex-wrap: wrap; gap: 7px; }
@@ -958,4 +1157,502 @@ button { color: inherit; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; translate: none !important; }
+}
+
+/* ==================== Widget system ==================== */
+
+.widget-layer { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+
+/* The `hidden` attribute must always win: widgets such as .weather are
+   display:flex, which would otherwise override the UA [hidden] rule. */
+[hidden] { display: none !important; }
+
+/* Plain new-tab elements promoted into movable/resizable widgets
+   (clock, date, search bar, quick access, focus timer, greeting...).
+   The widget engine lays these out in plain pixels on top of the
+   responsive scale() the design applies to short windows; that scale is
+   re-applied inline by applyWidgetPositions, so `transform: none` here is
+   only the fallback for a widget that was never measured. */
+.is-widget {
+  position: absolute;
+  pointer-events: auto;
+  box-sizing: border-box;
+  margin: 0;
+  transform: none;
+}
+
+.is-widget.is-editing {
+  outline: 1.5px dashed rgba(168, 225, 213, .8);
+  outline-offset: 3px;
+}
+
+.is-widget.is-dragging { z-index: 40; }
+
+/* While editing, the chrome (hand + resize grips) owns the pointer so
+   clicking a widget never triggers the underlying link/control. */
+.is-widget.is-editing > :not(.widget-chrome) { pointer-events: none; }
+
+.is-widget.is-editing > .widget-chrome { display: block; }
+
+.app-widget {
+  --w-text: rgba(255, 255, 255, .93);
+  --w-muted: rgba(255, 255, 255, .7);
+  --w-border: rgba(255, 255, 255, .15);
+  --w-surface: rgba(255, 255, 255, .07);
+  --w-bg: rgba(15, 27, 32, .42);
+  position: absolute;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 250px;
+  min-height: 132px;
+  overflow: visible;
+  border: 1px solid var(--w-border);
+  border-radius: 16px;
+  background: var(--widget-bg, var(--w-bg));
+  backdrop-filter: blur(var(--widget-blur, 16px));
+  -webkit-backdrop-filter: blur(var(--widget-blur, 16px));
+  box-shadow: 0 18px 42px rgba(0, 0, 0, .3);
+  color: var(--w-text);
+}
+.app-widget[hidden] { display: none; }
+.app-widget.is-editing { border-color: rgba(168, 225, 213, .75); box-shadow: 0 0 0 1px rgba(168, 225, 213, .5), 0 18px 42px rgba(0, 0, 0, .3); }
+.app-widget.is-dragging { box-shadow: 0 26px 54px rgba(0, 0, 0, .45); will-change: left, top; }
+
+/* --- edit chrome: hand handle + 8 resize grips --- */
+.widget-chrome { position: absolute; inset: 0; z-index: 6; display: none; pointer-events: none; }
+.app-widget.is-editing .widget-chrome { display: block; }
+
+.widget-drag-handle {
+  position: absolute;
+  top: 7px;
+  left: 7px;
+  display: grid;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, .3);
+  border-radius: 8px;
+  color: #fff;
+  background: rgba(10, 22, 26, .8);
+  line-height: 0;
+  cursor: grab;
+  touch-action: none;
+  pointer-events: auto;
+}
+.widget-drag-handle svg { display: block; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.7; }
+.widget-drag-handle:hover, .widget-drag-handle:focus-visible { background: rgba(40, 70, 77, .96); }
+.widget-drag-handle:active { cursor: grabbing; }
+
+/* keep the hand handle from covering content while editing */
+.app-widget.is-editing .weather-widget-body { padding-top: 46px; }
+
+/* widget bodies fill the (resizable) box and scroll if squeezed too small */
+.weather-widget-body { flex: 1 1 auto; min-height: 0; overflow: auto; }
+
+.widget-resize { position: absolute; width: 16px; height: 16px; pointer-events: auto; touch-action: none; }
+.widget-resize::after { content: ""; position: absolute; inset: 4px; border-radius: 4px; background: transparent; transition: background .15s ease; }
+.widget-resize:hover::after { background: rgba(168, 225, 213, .7); }
+.widget-resize[data-handle="nw"] { top: -7px; left: -7px; cursor: nwse-resize; }
+.widget-resize[data-handle="n"] { top: -7px; left: 50%; margin-left: -8px; cursor: ns-resize; }
+.widget-resize[data-handle="ne"] { top: -7px; right: -7px; cursor: nesw-resize; }
+.widget-resize[data-handle="e"] { top: 50%; right: -7px; margin-top: -8px; cursor: ew-resize; }
+.widget-resize[data-handle="se"] { bottom: -7px; right: -7px; cursor: nwse-resize; }
+.widget-resize[data-handle="s"] { bottom: -7px; left: 50%; margin-left: -8px; cursor: ns-resize; }
+.widget-resize[data-handle="sw"] { bottom: -7px; left: -7px; cursor: nesw-resize; }
+.widget-resize[data-handle="w"] { top: 50%; left: -7px; margin-top: -8px; cursor: ew-resize; }
+
+/* --- top-right edit toolbar --- */
+.widget-edit-bar {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  z-index: 60;
+  display: flex;
+  gap: 10px;
+  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, .18);
+  border-radius: 13px;
+  background: rgba(10, 22, 26, .74);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 16px 34px rgba(0, 0, 0, .38);
+  pointer-events: auto;
+}
+.widget-edit-bar[hidden] { display: none; }
+.widget-edit-bar button {
+  min-height: 38px;
+  padding: 0 18px;
+  border: 1px solid rgba(255, 255, 255, .2);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, .1);
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.widget-edit-bar button:hover { background: rgba(255, 255, 255, .18); }
+.widget-edit-bar .widget-edit-done { border-color: transparent; background: #a8e1d5; color: #102b2c; font-weight: 600; }
+.widget-edit-bar .widget-edit-done:hover { background: #c2f0e5; }
+
+/* --- right-click widget menu --- */
+.widget-context-menu {
+  position: absolute;
+  z-index: 70;
+  min-width: 158px;
+  padding: 6px;
+  display: grid;
+  gap: 4px;
+  border: 1px solid rgba(255, 255, 255, .18);
+  border-radius: 11px;
+  background: rgba(10, 22, 26, .88);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 16px 34px rgba(0, 0, 0, .42);
+  pointer-events: auto;
+}
+.widget-context-menu[hidden] { display: none; }
+.widget-context-menu button {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.widget-context-menu button:hover { background: rgba(168, 225, 213, .2); }
+.widget-context-menu button[data-widget-action="remove"]:hover { background: rgba(174, 54, 54, .4); }
+
+/* --- weather bar widget --- */
+.weather-widget-body { display: flex; flex-direction: column; gap: 15px; padding: 18px; }
+.weather-widget-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.weather-widget-place { display: grid; gap: 5px; min-width: 0; }
+.weather-widget-place strong { font-size: 23px; font-weight: 700; line-height: 1.15; overflow-wrap: anywhere; color: var(--w-text); }
+.weather-widget-place span { font-size: 12px; line-height: 1.35; color: var(--w-muted); }
+.weather-widget-now { display: flex; align-items: center; gap: 9px; flex: 0 0 auto; }
+.weather-widget-icon { font-size: 30px; line-height: 1; }
+.weather-widget-temp { font-size: 33px; font-weight: 700; line-height: 1; color: var(--w-text); }
+.weather-widget-forecast { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.weather-widget-forecast.is-single { grid-template-columns: 1fr; }
+.weather-forecast-card {
+  display: grid;
+  gap: 7px;
+  padding: 11px 12px;
+  border: 1px solid var(--w-border);
+  border-radius: 12px;
+  background: var(--w-surface);
+}
+.weather-forecast-card strong { font-size: 12px; font-weight: 600; color: var(--w-text); }
+.weather-forecast-icon { font-size: 21px; line-height: 1; }
+.weather-forecast-temp { font-size: 17px; font-weight: 700; color: var(--w-text); }
+
+/* --- widgets settings: toggle + triangle dropdown per widget --- */
+.widgets-edit-button { width: 100%; margin-top: 18px; justify-content: center; }
+.widgets-edit-button svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.7; }
+
+.widget-setting-list { display: grid; gap: 10px; margin-top: 14px; }
+.widget-setting-item {
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 13px;
+  background: rgba(255, 255, 255, .05);
+  overflow: hidden;
+}
+.widget-setting-head { display: flex; align-items: center; gap: 10px; padding: 12px 13px; }
+.widget-setting-copy { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.widget-setting-copy strong { font-size: 13.5px; font-weight: 700; color: rgba(255, 255, 255, .92); }
+.widget-setting-copy p { margin: 0; font-size: 11.5px; line-height: 1.45; color: rgba(255, 255, 255, .6); }
+
+.widget-setting-triangle {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, .14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .07);
+  color: rgba(255, 255, 255, .85);
+  cursor: pointer;
+  transition: transform .18s ease, background .18s ease;
+}
+.widget-setting-triangle svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2; }
+.widget-setting-triangle:hover { background: rgba(168, 225, 213, .28); }
+.widget-setting-item.is-open .widget-setting-triangle { transform: rotate(90deg); background: rgba(168, 225, 213, .32); }
+
+.widget-setting-dropdown {
+  display: grid;
+  gap: 4px;
+  padding: 0 13px 13px;
+  border-top: 1px dashed rgba(255, 255, 255, .12);
+}
+.widget-setting-dropdown .widget-transparency-row { padding-top: 12px; }
+.widget-option-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 12px;
+}
+.widget-option-row > span:first-child { font-size: 12.5px; color: rgba(255, 255, 255, .78); }
+.widget-option-actions { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.widget-segmented { display: inline-flex; gap: 6px; }
+.widget-segmented .option-setting-button.is-active { background: #a8e1d5; border-color: #a8e1d5; color: #16272d; }
+
+/* --- option rows in settings (theme / unit / time format) --- */
+.option-setting-list { display: grid; gap: 10px; margin-top: 18px; }
+.option-setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 14px;
+  border: 1px solid rgba(255, 255, 255, .13);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, .05);
+}
+.option-setting-row > span { font-size: 13px; font-weight: 600; color: rgba(255, 255, 255, .9); }
+.option-setting-button {
+  min-width: 132px;
+  padding: 9px 14px;
+  border: 1px solid rgba(255, 255, 255, .2);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, .1);
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.option-setting-button:hover { background: rgba(255, 255, 255, .2); }
+
+/* --- widgets settings: transparency --- */
+.widget-transparency-group {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, .13);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, .05);
+}
+.widget-transparency-title { font-size: 13px; font-weight: 600; color: rgba(255, 255, 255, .9); }
+.widget-transparency-row { display: grid; grid-template-columns: 108px minmax(0, 1fr) 46px; align-items: center; gap: 12px; font-size: 12.5px; color: rgba(255, 255, 255, .78); }
+.widget-transparency-row input[type="range"] { width: 100%; accent-color: #a8e1d5; cursor: pointer; }
+.widget-transparency-row output { text-align: right; font-variant-numeric: tabular-nums; color: rgba(255, 255, 255, .88); font-weight: 600; }
+.widgets-hint { margin: 16px 0 0; font-size: 11.5px; line-height: 1.55; color: rgba(255, 255, 255, .55); }
+
+/* --- widgets settings: right-click toggle + settings card appearance --- */
+.widgets-quick-settings { display: grid; gap: 10px; margin-top: 16px; }
+.widgets-rightclick-row { margin: 0; }
+.widget-appearance-group { display: grid; gap: 12px; padding: 14px; border: 1px solid rgba(255, 255, 255, .13); border-radius: 11px; background: rgba(255, 255, 255, .05); }
+.widgets-add-media { display: inline-flex; width: fit-content; margin-top: 12px; }
+.widgets-add-media svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.widget-setting-dropdown .widgets-add-media { margin-top: 4px; }
+
+/* photo/video widgets live inside their "Add … widget" dropdown */
+.widget-media-list { display: grid; gap: 10px; padding-top: 12px; }
+.widget-media-list:empty { display: none; }
+.widget-media-list .widget-setting-item { border-color: rgba(255, 255, 255, .14); background: rgba(255, 255, 255, .07); }
+
+/* --- every widget dropdown ends with a per-widget reset symbol --- */
+.widget-reset-row { display: flex; justify-content: flex-end; padding-top: 10px; margin-top: 6px; border-top: 1px dashed rgba(255, 255, 255, .12); }
+.widget-reset-button {
+  display: grid;
+  place-items: center;
+  width: 27px;
+  height: 27px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .07);
+  color: rgba(255, 255, 255, .85);
+  cursor: pointer;
+  transition: background .16s ease, color .16s ease, transform .2s ease;
+}
+.widget-reset-button:hover, .widget-reset-button:focus-visible { outline: none; background: rgba(168, 225, 213, .3); color: #fff; transform: rotate(-40deg); }
+.widget-reset-button svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+.widget-text-row { display: grid; gap: 7px; padding-top: 12px; font-size: 12.5px; color: rgba(255, 255, 255, .78); }
+.widget-text-row input { padding: 8px 10px; border: 1px solid rgba(255, 255, 255, .18); border-radius: 9px; background: rgba(255, 255, 255, .07); color: #fff; font: inherit; font-size: 13px; }
+.widget-text-row input::placeholder { color: rgba(255, 255, 255, .45); }
+.widget-dropdown-note { margin: 8px 0 0; font-size: 11px; line-height: 1.5; color: rgba(255, 255, 255, .52); }
+.option-setting-button.is-danger { border-color: rgba(255, 130, 130, .42); color: #ffb4b4; }
+.option-setting-button.is-danger:hover { background: rgba(255, 80, 80, .18); }
+
+/* --- popup after right-click → Edit (wallpaper storage menu style) --- */
+.widget-edit-popup {
+  position: fixed;
+  z-index: 62;
+  display: grid;
+  gap: 9px;
+  min-width: 216px;
+  padding: 11px 12px 10px;
+  border: 1px solid rgba(255, 255, 255, .2);
+  border-radius: 9px;
+  background: #1b3036;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, .42);
+  pointer-events: auto;
+}
+.widget-edit-popup[hidden] { display: none; }
+.widget-edit-popup .widget-transparency-row { grid-template-columns: 74px minmax(0, 1fr) 40px; gap: 8px; font-size: 11.5px; }
+.widget-edit-popup-actions { display: flex; justify-content: flex-end; gap: 7px; padding-top: 4px; }
+.widget-edit-popup-actions button {
+  min-height: 30px;
+  padding: 0 13px;
+  border: 1px solid rgba(255, 255, 255, .2);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, .08);
+  color: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.widget-edit-popup-actions button:hover { background: rgba(255, 255, 255, .17); }
+.widget-edit-popup-actions .is-primary { border-color: transparent; background: #a8e1d5; color: #102b2c; font-weight: 700; }
+.widget-edit-popup-actions .is-primary:hover { background: #bdebe1; }
+
+/* --- photo widget source picker (same look as the wallpaper storage popup).
+   It is a modal <dialog> so it also works from the settings dialog, which is
+   itself in the top layer. --- */
+.widget-photo-picker {
+  position: fixed;
+  margin: auto;
+  inset: 0;
+  width: min(440px, calc(100vw - 40px));
+  max-width: none;
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, .2);
+  border-radius: 13px;
+  background: #1b3036;
+  color: #fff;
+  box-shadow: 0 18px 52px rgba(0, 0, 0, .5);
+}
+.widget-photo-picker::backdrop { background: rgba(5, 13, 17, .55); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+.widget-photo-picker-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; font-size: 13.5px; }
+.widget-photo-picker-sources { display: grid; gap: 9px; }
+.widget-photo-picker-sources button {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-height: 46px;
+  padding: 0 13px;
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .05);
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background .16s ease, border-color .16s ease;
+}
+.widget-photo-picker-sources button:hover { background: rgba(255, 255, 255, .12); border-color: rgba(255, 255, 255, .3); }
+.widget-photo-picker-sources svg { width: 18px; height: 18px; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.widget-photo-picker-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; max-height: 300px; overflow: auto; padding: 2px; }
+.widget-photo-picker-grid[hidden] { display: none; }
+
+/* stored wallpapers come in two shelves: system (built-in) and the user's own */
+.widget-photo-picker-groups { display: grid; gap: 14px; max-height: 340px; overflow: auto; padding: 2px; }
+.widget-photo-picker-groups[hidden] { display: none; }
+.widget-photo-picker-group { display: grid; gap: 8px; }
+.widget-photo-picker-group-title { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: rgba(255, 255, 255, .55); }
+.widget-photo-picker-item { aspect-ratio: 16 / 10; padding: 0; overflow: hidden; border: 1px solid rgba(255, 255, 255, .16); border-radius: 9px; background: rgba(255, 255, 255, .06); cursor: pointer; transition: transform .16s ease, border-color .16s ease; }
+.widget-photo-picker-item:hover { transform: translateY(-2px); border-color: rgba(168, 225, 213, .75); }
+.widget-photo-picker-item img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.widget-photo-picker-item video { display: block; width: 100%; height: 100%; object-fit: cover; background: #000; }
+.widget-photo-empty { margin: 4px 0 0; }
+.widget-photo-back { display: block; margin-top: 12px; }
+
+/* --- photo & video widgets (portrait by default; orientation flips any time) --- */
+.media-widget { display: block; width: 244px; height: 316px; min-width: 150px; min-height: 110px; padding: 0; overflow: hidden; }
+.media-widget.is-landscape { width: 316px; height: 244px; }
+.media-widget .media-widget-frame {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border: 1px dashed rgba(255, 255, 255, .38);
+  border-radius: inherit;
+  background: var(--widget-bg, rgba(255, 255, 255, .1));
+  backdrop-filter: blur(var(--widget-blur, 16px));
+  -webkit-backdrop-filter: blur(var(--widget-blur, 16px));
+}
+.media-widget.has-media .media-widget-frame { border-style: solid; border-color: rgba(255, 255, 255, .2); }
+.media-widget-image, .media-widget-video { display: none; width: 100%; height: 100%; object-fit: cover; }
+.media-widget-video { background: #000; }
+.media-widget.has-media .media-widget-image, .media-widget.has-media .media-widget-video { display: block; }
+.media-widget-add {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  width: 62px;
+  height: 62px;
+  margin: auto;
+  padding: 0;
+  border: 1.5px dashed rgba(255, 255, 255, .5);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .1);
+  color: #fff;
+  cursor: pointer;
+  transition: background .16s ease, transform .16s ease;
+}
+.media-widget-add:hover { background: rgba(255, 255, 255, .22); transform: scale(1.06); }
+.media-widget.has-media .media-widget-add { display: none; }
+.media-widget-add svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.media-widget-change {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, .3);
+  border-radius: 50%;
+  background: rgba(10, 22, 26, .78);
+  color: #fff;
+  cursor: pointer;
+}
+.media-widget-change:hover { background: rgba(40, 70, 77, .96); }
+.media-widget.has-media.is-editing .media-widget-change { display: grid; }
+.media-widget-change svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+/* --- light theme --- */
+[data-theme="light"] { color-scheme: light; --white: #14313a; --glass: rgba(255, 255, 255, .5); --glass-border: rgba(20, 49, 58, .18); }
+[data-theme="light"] .new-tab { background: #e9f1f3; }
+[data-theme="light"] .glass-icon { background: rgba(255, 255, 255, .6); border-color: rgba(20, 49, 58, .16); color: #14313a; }
+[data-theme="light"] .glass-icon:hover { background: rgba(255, 255, 255, .85); }
+[data-theme="light"] .app-widget {
+  --w-text: rgba(18, 38, 46, .95);
+  --w-muted: rgba(18, 38, 46, .68);
+  --w-border: rgba(18, 38, 46, .16);
+  --w-surface: rgba(255, 255, 255, .5);
+  --w-bg: rgba(255, 255, 255, .72);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, .16);
+}
+[data-theme="light"] .quick-setting-row button { background: rgba(18, 38, 46, .08); border-color: rgba(18, 38, 46, .16); }
+[data-theme="light"] .quick-setting-row button:hover { background: rgba(18, 38, 46, .14); }
+[data-theme="light"] .weather-widget-icon, [data-theme="light"] .weather-forecast-icon { filter: none; }
+
+@media (max-width: 640px) {
+  .app-widget { min-width: 190px; }
+  .weather-widget-place strong { font-size: 19px; }
+  .weather-widget-temp { font-size: 27px; }
+  .quick-setting-row span { font-size: 12px; }
+  .option-setting-row { flex-wrap: wrap; }
+  .option-setting-button { min-width: 110px; }
+  .widget-edit-bar { top: 14px; right: 14px; }
 }
