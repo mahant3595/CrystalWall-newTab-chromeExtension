@@ -380,6 +380,16 @@
                 <input id="quote-subtitle-input" type="text" maxlength="160">
                 <button class="wallpaper-action secondary quote-reset" type="button" data-quote-reset="subtitle">Reset</button>
               </div>
+              <div class="quote-setting">
+                <label for="quote-font-select">Font style</label>
+                <select id="quote-font-select"></select>
+                <button class="wallpaper-action secondary quote-reset" type="button" data-quote-reset="font">Reset</button>
+              </div>
+              <div class="quote-setting">
+                <label for="quote-size-slider">Text size <output id="quote-size-value" for="quote-size-slider">100%</output></label>
+                <input id="quote-size-slider" type="range" min="60" max="180" step="5" value="100">
+                <button class="wallpaper-action secondary quote-reset" type="button" data-quote-reset="size">Reset</button>
+              </div>
             </div>
           </section>
 
@@ -679,6 +689,15 @@
                   <label class="widget-text-row" for="greeting-text-input">
                     <span>Greeting text</span>
                     <input id="greeting-text-input" type="text" maxlength="40" placeholder="Automatic — Good morning / afternoon / evening" autocomplete="off">
+                  </label>
+                  <label class="widget-transparency-row widget-font-row" for="greeting-font-select">
+                    <span>Font style</span>
+                    <select id="greeting-font-select"></select>
+                  </label>
+                  <label class="widget-transparency-row" for="greeting-size-slider">
+                    <span>Text size</span>
+                    <input type="range" id="greeting-size-slider" min="60" max="180" step="5" value="100">
+                    <output id="greeting-size-value" for="greeting-size-slider">100%</output>
                   </label>
                 </div>
               </div>

@@ -155,6 +155,50 @@ try {
 } catch (error) {
   console.error("Couldn't read the greeting text:", error);
 }
+
+/* Greeting + quote text appearance: user-pickable font and size. The font
+   list is local stacks only (no network) so a pick renders instantly. */
+const greetingFontStorageKey = "stillroom-greeting-font";
+const greetingSizeStorageKey = "stillroom-greeting-size";
+const quoteFontStorageKey = "stillroom-quote-font";
+const quoteSizeStorageKey = "stillroom-quote-size";
+let greetingFont = "";
+let greetingSize = 100;
+let quoteFont = "";
+let quoteSize = 100;
+
+const textFontChoices = [
+  { value: "", label: "Default" },
+  { value: "'Kaushan Script', 'Segoe Script', cursive", label: "Handwritten" },
+  { value: "'Segoe Script', 'Bradley Hand', cursive", label: "Casual script" },
+  { value: "'Trebuchet MS', 'Segoe UI', sans-serif", label: "Rounded sans" },
+  { value: "'Segoe UI', Arial, sans-serif", label: "Clean sans" },
+  { value: "Georgia, 'Times New Roman', serif", label: "Elegant serif" },
+  { value: "'Comic Sans MS', 'Segoe Print', cursive", label: "Playful" },
+  { value: "'Cascadia Mono', Consolas, monospace", label: "Monospace" },
+  { value: "Impact, 'Arial Black', sans-serif", label: "Bold display" }
+];
+
+function isTextFontChoice(value) {
+  return textFontChoices.some((choice) => choice.value === value);
+}
+
+function clampTextSize(value) {
+  const size = Math.round(Number(value));
+  return Number.isFinite(size) ? Math.min(180, Math.max(60, size)) : 100;
+}
+
+try {
+  const savedGreetingFont = localStorage.getItem(greetingFontStorageKey) || "";
+  if (isTextFontChoice(savedGreetingFont)) greetingFont = savedGreetingFont;
+  greetingSize = clampTextSize(localStorage.getItem(greetingSizeStorageKey) || 100);
+  const savedQuoteFont = localStorage.getItem(quoteFontStorageKey) || "";
+  if (isTextFontChoice(savedQuoteFont)) quoteFont = savedQuoteFont;
+  quoteSize = clampTextSize(localStorage.getItem(quoteSizeStorageKey) || 100);
+} catch (error) {
+  console.error("Couldn't read the greeting/quote text settings:", error);
+}
+applyTextAppearance();
 /* Widgets-section preferences. They load up here because parts of the page
    (weather card rendering) run before the widget module is reached. */
 const widgetRightclickStorageKey = "stillroom-widget-rightclick";
@@ -990,27 +1034,41 @@ let lastSuggestionSignature = "";
 
 async function fetchSuggestions(query, signal) {
   if (!query) return [];
-  try {
-    const language = navigator.language || "en";
-    const response = await fetch(`https://suggestqueries.google.com/complete/search?client=chrome&hl=${encodeURIComponent(language)}&q=${encodeURIComponent(query)}`, { signal });
-    if (!response.ok) {
-      throw new Error(`Suggestion request failed with status ${response.status}`);
+
+  const language = navigator.language || "en";
+  const encoded = encodeURIComponent(query);
+  /* Google first. If it is unreachable (offline, blocked, rate-limited) the
+     next source gets a turn — DuckDuckGo returns the same [query, [items]]
+     shape. A source that fails stays silent: an unreachable suggestion
+     source should never throw red errors into the console. */
+  const sources = [
+    `https://suggestqueries.google.com/complete/search?client=chrome&hl=${encodeURIComponent(language)}&q=${encoded}`,
+    `https://suggestqueries.google.com/complete/search?client=firefox&hl=${encodeURIComponent(language)}&q=${encoded}`,
+    `https://duckduckgo.com/ac/?type=list&q=${encoded}`
+  ];
+
+  for (const url of sources) {
+    try {
+      const response = await fetch(url, { signal });
+      if (!response.ok) continue;
+      const data = await response.json();
+      if (!Array.isArray(data) || !Array.isArray(data[1])) continue;
+      /* Take the suggestions as they come. They don't have to literally
+         start with the typed words (search engines reword and complete
+         mid-sentence), and demanding that prefix used to leave the
+         dropdown empty. */
+      const suggestions = [...new Set(data[1]
+        .filter((suggestion) => typeof suggestion === "string")
+        .map((suggestion) => suggestion.trim())
+        .filter(Boolean))]
+        .slice(0, 8);
+      if (suggestions.length > 0) return suggestions;
+    } catch (error) {
+      if (error.name === "AbortError") return [];
+      // This source failed — quietly try the next one.
     }
-    const data = await response.json();
-    if (!Array.isArray(data) || !Array.isArray(data[1])) return [];
-    /* Take Google's suggestions as they come. They don't have to literally
-       start with the typed words (Google rewords and completes mid-sentence),
-       and demanding that prefix is what used to leave the dropdown empty. */
-    return [...new Set(data[1]
-      .filter((suggestion) => typeof suggestion === "string")
-      .map((suggestion) => suggestion.trim())
-      .filter(Boolean))]
-      .slice(0, 8);
-  } catch (error) {
-    if (error.name === "AbortError") return [];
-    console.error("Error fetching suggestions:", error);
-    return [];
   }
+  return [];
 }
 
 function getCachedSuggestions(query) {
@@ -1395,6 +1453,14 @@ for (const key of Object.keys(quoteDefaults)) {
 document.querySelectorAll(".quote-reset").forEach((button) => {
   button.addEventListener("click", () => {
     const key = button.dataset.quoteReset;
+    if (key === "font") {
+      setQuoteFont("");
+      return;
+    }
+    if (key === "size") {
+      setQuoteSize(100);
+      return;
+    }
     if (!Object.hasOwn(quoteDefaults, key)) return;
     currentQuotes[key] = quoteDefaults[key];
     quoteInputs[key].value = quoteDefaults[key];
@@ -2455,7 +2521,12 @@ window.addEventListener("pointerup", async (event) => {
     { transform: drag.card.style.transform },
     { transform: `translate3d(${destination.left - dragOriginX}px, ${destination.top - dragOriginY}px, 0)` }
   ], { duration: 240, easing: "cubic-bezier(.2,.75,.25,1)" });
-  await settleAnimation.finished;
+  /* Glide into the slot, but never let a stalled or cancelled animation
+     strand the card outside the grid — the timeout guarantees the drop. */
+  await Promise.race([
+    settleAnimation.finished.catch(() => {}),
+    new Promise((resolve) => window.setTimeout(resolve, 320))
+  ]);
   drag.placeholder.replaceWith(drag.card);
   drag.card.style.cssText = "";
   const previousOrder = [...getWallpaperOrder(drag.group)];
@@ -2552,23 +2623,80 @@ function getWallpaperOrder(group) {
   return group === "system" ? systemWallpaperOrder : userWallpaperOrder;
 }
 
+function captureWallpaperRects(grid) {
+  const rects = new Map();
+  if (!grid) return rects;
+  for (const card of grid.children) {
+    if (card.dataset.wallpaperId) rects.set(card.dataset.wallpaperId, card.getBoundingClientRect());
+  }
+  return rects;
+}
+
+/* renderWallpaperGrid() rebuilds every card, so after a click or key press
+   the whole grid would jump. Glide each card from where it used to sit to
+   its new slot instead — the same shuffle feel as hold-and-drag. */
+function animateWallpaperReorder(grid, previousRects) {
+  if (!grid || !previousRects) return;
+  for (const card of grid.children) {
+    const previous = previousRects.get(card.dataset.wallpaperId);
+    if (!previous) continue;
+    const current = card.getBoundingClientRect();
+    const offsetX = previous.left - current.left;
+    const offsetY = previous.top - current.top;
+    if (!offsetX && !offsetY) continue;
+    card.getAnimations().forEach((animation) => animation.cancel());
+    card.animate(
+      [
+        { transform: `translate3d(${offsetX}px, ${offsetY}px, 0)` },
+        { transform: "translate3d(0, 0, 0)" }
+      ],
+      { duration: wallpaperReorderAnimationDuration, easing: "cubic-bezier(.2,.75,.25,1)" }
+    );
+  }
+}
+
 async function moveWallpaper(id, group, targetIndex) {
   const previousOrder = [...getWallpaperOrder(group)];
   const order = [...previousOrder];
   const currentIndex = order.indexOf(id);
   if (currentIndex === -1) return;
   order.splice(currentIndex, 1);
-  const adjustedIndex = currentIndex < targetIndex ? targetIndex - 1 : targetIndex;
-  order.splice(Math.max(0, Math.min(adjustedIndex, order.length)), 0, id);
+  const finalIndex = Math.max(0, Math.min(
+    currentIndex < targetIndex ? targetIndex - 1 : targetIndex,
+    order.length
+  ));
+  order.splice(finalIndex, 0, id);
   if (group === "system") systemWallpaperOrder = order;
   else userWallpaperOrder = order;
 
+  /* Slide the existing card to its new slot instead of re-rendering the
+     grid — a rebuild recreates every card, which reloads all images (the
+     visible "refresh") and makes the move lag on large wallpapers. Keeping
+     the elements means nothing reloads; the FLIP pass glides everything. */
+  const grid = group === "system" ? systemWallpaperGrid : userWallpaperGrid;
+  const card = grid ? grid.querySelector(`[data-wallpaper-id="${CSS.escape(id)}"]`) : null;
+
   try {
     await saveWallpaperOrder();
-    renderWallpaperGrid();
+    if (!card || !card.isConnected || !grid) {
+      // Something else rebuilt the grid meanwhile — fall back to a full render.
+      renderWallpaperGrid();
+      return;
+    }
+    const previousRects = captureWallpaperRects(grid);
+    const domCards = [...grid.children].filter((item) => item.dataset.wallpaperId);
+    const fromIndex = domCards.indexOf(card);
+    const toIndex = Math.max(0, Math.min(finalIndex, domCards.length - 1));
+    if (toIndex < fromIndex) {
+      grid.insertBefore(card, domCards[toIndex]);
+    } else if (toIndex > fromIndex) {
+      grid.insertBefore(card, domCards[toIndex].nextElementSibling);
+    }
+    animateWallpaperReorder(grid, previousRects);
   } catch (error) {
     if (group === "system") systemWallpaperOrder = previousOrder;
     else userWallpaperOrder = previousOrder;
+    renderWallpaperGrid();
     showToast(`Couldn't save wallpaper order: ${error.message}`);
   }
 }
@@ -3066,6 +3194,8 @@ document.querySelector("#music-reset-settings").addEventListener("click", () => 
 document.querySelector("#quotes-reset-settings").addEventListener("click", () => {
   requestSettingsReset("Quotes", () => {
     currentQuotes = { ...quoteDefaults };
+    setQuoteFont("");
+    setQuoteSize(100);
     renderQuotes();
     if (!saveQuotes()) return;
     showToast("Quotes reset");
@@ -4175,6 +4305,7 @@ function syncWidgetPreferenceUI() {
 
   const greetingInput = document.querySelector("#greeting-text-input");
   if (greetingInput && document.activeElement !== greetingInput) greetingInput.value = greetingCustom;
+  syncTextAppearanceControls();
 }
 
 function syncDisplayOptionUI() {
@@ -4251,7 +4382,11 @@ function resetSingleWidget(id) {
     setForecastDays(true, true);
   }
   if (id === "focus-timer") setFocusMinutes(25);
-  if (id === "greeting") setGreetingCustom("");
+  if (id === "greeting") {
+    setGreetingCustom("");
+    setGreetingFont("");
+    setGreetingSize(100);
+  }
 
   saveWidgetState();
   applyWidgetPositions();
@@ -4641,6 +4776,83 @@ function setGreetingCustom(text) {
   updateGreeting();
   const input = document.querySelector("#greeting-text-input");
   if (input && document.activeElement !== input) input.value = greetingCustom;
+}
+
+// --- Greeting / quote text appearance (font style + size) ---
+
+/* The picked values ride on CSS custom properties so responsive rules in
+   styles.css keep multiplying against them; a default value removes the
+   property entirely, restoring the stock look. */
+function applyTextAppearance() {
+  const rootStyle = document.documentElement.style;
+  const pairs = [
+    ["--greeting-font", greetingFont],
+    ["--greeting-scale", greetingSize === 100 ? "" : String(greetingSize / 100)],
+    ["--quote-font", quoteFont],
+    ["--quote-scale", quoteSize === 100 ? "" : String(quoteSize / 100)]
+  ];
+  for (const [name, value] of pairs) {
+    if (value) rootStyle.setProperty(name, value);
+    else rootStyle.removeProperty(name);
+  }
+}
+
+function saveTextPref(storageKey, value) {
+  try {
+    if (value) localStorage.setItem(storageKey, String(value));
+    else localStorage.removeItem(storageKey);
+  } catch (error) {
+    console.error("Couldn't save the text settings:", error);
+  }
+}
+
+function setGreetingFont(value) {
+  greetingFont = isTextFontChoice(value) ? value : "";
+  saveTextPref(greetingFontStorageKey, greetingFont);
+  applyTextAppearance();
+  syncTextAppearanceControls();
+}
+
+function setGreetingSize(value) {
+  greetingSize = clampTextSize(value);
+  saveTextPref(greetingSizeStorageKey, greetingSize === 100 ? "" : greetingSize);
+  applyTextAppearance();
+  syncTextAppearanceControls();
+}
+
+function setQuoteFont(value) {
+  quoteFont = isTextFontChoice(value) ? value : "";
+  saveTextPref(quoteFontStorageKey, quoteFont);
+  applyTextAppearance();
+  syncTextAppearanceControls();
+}
+
+function setQuoteSize(value) {
+  quoteSize = clampTextSize(value);
+  saveTextPref(quoteSizeStorageKey, quoteSize === 100 ? "" : quoteSize);
+  applyTextAppearance();
+  syncTextAppearanceControls();
+}
+
+function syncTextAppearanceControls() {
+  const setText = (selector, text) => {
+    const element = document.querySelector(selector);
+    if (element) element.textContent = text;
+  };
+  const setSelect = (selector, value) => {
+    const element = document.querySelector(selector);
+    if (element && document.activeElement !== element) element.value = value;
+  };
+  const setSlider = (selector, value) => {
+    const element = document.querySelector(selector);
+    if (element && document.activeElement !== element) element.value = String(value);
+  };
+  setSelect("#greeting-font-select", greetingFont);
+  setSlider("#greeting-size-slider", greetingSize);
+  setText("#greeting-size-value", `${greetingSize}%`);
+  setSelect("#quote-font-select", quoteFont);
+  setSlider("#quote-size-slider", quoteSize);
+  setText("#quote-size-value", `${quoteSize}%`);
 }
 
 // --- Tomorrow / after-tomorrow forecast cards ---
@@ -5454,6 +5666,28 @@ if (greetingTextInput) {
   greetingTextInput.addEventListener("input", () => setGreetingCustom(greetingTextInput.value));
 }
 
+// --- Greeting / quote font + size controls (options filled from JS) ---
+const greetingFontSelect = document.querySelector("#greeting-font-select");
+const greetingSizeSlider = document.querySelector("#greeting-size-slider");
+const quoteFontSelect = document.querySelector("#quote-font-select");
+const quoteSizeSlider = document.querySelector("#quote-size-slider");
+
+for (const select of [greetingFontSelect, quoteFontSelect]) {
+  if (!select) continue;
+  select.replaceChildren(...textFontChoices.map((choice) => {
+    const option = document.createElement("option");
+    option.value = choice.value;
+    option.textContent = choice.label;
+    return option;
+  }));
+}
+
+if (greetingFontSelect) greetingFontSelect.addEventListener("change", () => setGreetingFont(greetingFontSelect.value));
+if (greetingSizeSlider) greetingSizeSlider.addEventListener("input", () => setGreetingSize(greetingSizeSlider.value));
+if (quoteFontSelect) quoteFontSelect.addEventListener("change", () => setQuoteFont(quoteFontSelect.value));
+if (quoteSizeSlider) quoteSizeSlider.addEventListener("input", () => setQuoteSize(quoteSizeSlider.value));
+syncTextAppearanceControls();
+
 // --- Add photo / video widget (buttons live inside their dropdown rows) ---
 const widgetsAddPhotoButton = document.querySelector("#widgets-add-photo");
 if (widgetsAddPhotoButton) widgetsAddPhotoButton.addEventListener("click", () => addMediaWidget("photo"));
@@ -5601,6 +5835,8 @@ if (widgetsResetButton) {
       setWidgetRightclickEnabled(true);
       setSettingsCardAppearance(0, 50);
       setGreetingCustom("");
+      setGreetingFont("");
+      setGreetingSize(100);
       setFocusMinutes(25);
       showToast("Widgets reset to default");
     });
